@@ -27,7 +27,7 @@ export function PlayerCard({
 }: PlayerCardProps) {
   const roleColor = player.role?.type === 'snake'
     ? 'border-red-500/40 glow-snake'
-    : player.role?.type === 'seer'
+    : player.role?.type === 'mongoose'
     ? 'border-blue-400/40 glow-seer'
     : 'border-green-400/40 glow-villager';
 
@@ -91,7 +91,7 @@ export function PlayerCard({
           className={clsx(
             'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
             player.role.type === 'snake' ? 'bg-red-500/30 text-red-300' :
-            player.role.type === 'seer' ? 'bg-blue-500/30 text-blue-300' :
+            player.role.type === 'mongoose' ? 'bg-blue-500/30 text-blue-300' :
             'bg-green-500/30 text-green-300'
           )}
         >

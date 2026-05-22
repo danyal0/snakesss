@@ -3,10 +3,11 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { HomeScreen } from './screens/HomeScreen';
 import { RoomScreen } from './screens/RoomScreen';
 import { PublicRoomsScreen } from './screens/PublicRoomsScreen';
-import { useSocket } from './hooks/useSocket';
+import { useSocketListeners } from './hooks/useSocket';
 
 export default function App() {
-  useSocket();
+  // Register ALL socket listeners exactly once here — never in child components
+  useSocketListeners();
 
   return (
     <div className="h-full w-full">
@@ -14,7 +15,6 @@ export default function App() {
         <Route path="/" element={<HomeScreen />} />
         <Route path="/room/:roomId" element={<RoomScreen />} />
         <Route path="/rooms" element={<PublicRoomsScreen />} />
-        {/* /admin is served by the admin app (proxied in dev, static in prod) */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

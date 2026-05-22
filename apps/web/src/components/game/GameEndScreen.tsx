@@ -13,161 +13,187 @@ interface GameEndScreenProps {
 }
 
 export function GameEndScreen({ gameState, winner, myPlayerId, onPlayAgain, onLeave }: GameEndScreenProps) {
-  const myRole = gameState.players.find((p) => p.id === myPlayerId)?.role;
+  const me = gameState.players.find((p) => p.id === myPlayerId);
+  const myRoleType = me?.role?.type;
   const iWon =
-    (winner === 'villagers' && myRole?.type !== 'snake') ||
-    (winner === 'snakes' && myRole?.type === 'snake');
+    (winner === 'humans' && myRoleType !== 'snake') ||
+    (winner === 'snakes' && myRoleType === 'snake');
 
-  const villagers = gameState.players.filter((p) => p.role?.type !== 'snake' && !p.isSpectator);
   const snakes = gameState.players.filter((p) => p.role?.type === 'snake' && !p.isSpectator);
+  const humans = gameState.players.filter((p) => p.role?.type !== 'snake' && !p.isSpectator);
+
+  const sorted = [...gameState.players]
+    .filter((p) => !p.isSpectator)
+    .sort((a, b) => b.score - a.score);
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 overflow-y-auto scrollbar-none"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center p-5 overflow-y-auto scrollbar-none"
       style={{
         background: winner === 'snakes'
           ? 'radial-gradient(ellipse at center, rgba(255,59,107,0.15) 0%, #0a0a0f 70%)'
           : 'radial-gradient(ellipse at center, rgba(0,255,136,0.12) 0%, #0a0a0f 70%)',
       }}
     >
-      {/* Confetti-like particles */}
+      {/* Confetti */}
       {iWon && (
         <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          {Array.from({ length: 20 }).map((_, i) => (
+          {Array.from({ length: 16 }).map((_, i) => (
             <motion.div
               key={i}
-              initial={{ y: -20, x: Math.random() * window.innerWidth, opacity: 1 }}
-              animate={{ y: window.innerHeight + 20, opacity: 0, rotate: Math.random() * 720 }}
+              initial={{ y: -20, x: `${Math.random() * 100}vw`, opacity: 1 }}
+              animate={{ y: '110vh', opacity: 0, rotate: Math.random() * 720 }}
               transition={{ duration: 2 + Math.random() * 2, delay: Math.random() * 1.5, ease: 'linear' }}
               className="absolute w-2 h-2 rounded-sm"
-              style={{
-                background: ['#00ff88', '#00d4ff', '#ffb800', '#ff3b6b'][Math.floor(Math.random() * 4)],
-              }}
+              style={{ background: ['#00ff88', '#00d4ff', '#ffb800', '#ff3b6b'][Math.floor(Math.random() * 4)] }}
             />
           ))}
         </div>
       )}
 
-      <div className="max-w-md w-full space-y-6">
-        {/* Winner announcement */}
+      <div className="max-w-md w-full space-y-5">
+        {/* Winner */}
         <div className="text-center space-y-3">
           <motion.div
             initial={{ scale: 0, rotate: -20 }}
             animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 15, delay: 0.2 }}
-            className="text-8xl"
+            transition={{ type: 'spring', stiffness: 280, damping: 15, delay: 0.2 }}
+            className="text-7xl"
           >
-            {winner === 'villagers' ? '🏆' : '🐍'}
+            {winner === 'humans' ? '🏆' : '🐍'}
           </motion.div>
 
           <motion.h1
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className={clsx(
-              'text-4xl font-bold',
-              winner === 'villagers' ? 'text-green-400' : 'text-red-400'
-            )}
+            className={clsx('text-3xl font-black', winner === 'humans' ? 'text-green-400' : 'text-red-400')}
           >
-            {winner === 'villagers' ? 'Villagers Win!' : 'Snakes Win!'}
+            {winner === 'humans' ? 'Humans Win!' : 'Snakes Win!'}
           </motion.h1>
 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
+            transition={{ delay: 0.55 }}
             className={clsx(
-              'inline-block px-4 py-2 rounded-xl text-sm font-semibold',
-              iWon ? 'bg-green-500/30 text-green-300' : 'bg-red-500/30 text-red-300'
+              'inline-block px-4 py-1.5 rounded-xl text-sm font-semibold',
+              iWon ? 'bg-green-500/25 text-green-300' : 'bg-red-500/25 text-red-300'
             )}
           >
             {iWon ? '🎉 You Won!' : '💀 You Lost'}
           </motion.div>
         </div>
 
-        {/* Players reveal */}
+        {/* Scoreboard */}
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="glass rounded-2xl p-4 space-y-4"
+          transition={{ delay: 0.65 }}
+          className="glass rounded-2xl p-4"
+        >
+          <p className="text-[10px] text-white/30 uppercase tracking-wider mb-3">Final Scores</p>
+          <div className="space-y-2">
+            {sorted.map((player, i) => {
+              const isSnakePlayer = player.role?.type === 'snake';
+              const maxScore = sorted[0]?.score ?? 1;
+              return (
+                <div key={player.id} className="flex items-center gap-2">
+                  <span className="text-xs text-white/30 w-5 text-center font-bold">{i + 1}</span>
+                  <span className="text-base">{player.avatar}</span>
+                  <div className="flex-1">
+                    <div className="flex justify-between mb-0.5">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-medium text-white">{player.username}</span>
+                        {player.id === myPlayerId && <span className="text-[9px] text-white/40">(you)</span>}
+                        {isSnakePlayer && <span className="text-[10px] text-red-400">🐍</span>}
+                        {player.role?.type === 'mongoose' && <span className="text-[10px] text-yellow-400">🦡</span>}
+                      </div>
+                      <span className="text-xs font-bold text-white">{player.score} pts</span>
+                    </div>
+                    <div className="h-1.5 bg-white/8 rounded-full overflow-hidden">
+                      <motion.div
+                        className={clsx('h-full rounded-full', isSnakePlayer ? 'bg-red-500' : 'bg-gradient-to-r from-green-500 to-teal-500')}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(player.score / Math.max(maxScore, 1)) * 100}%` }}
+                        transition={{ duration: 0.7, delay: 0.7 + i * 0.05 }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+
+        {/* Roles reveal */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+          className="glass rounded-2xl p-4 space-y-3"
         >
           <div>
-            <h3 className="text-xs uppercase tracking-wider text-white/50 mb-3">
-              🐍 Snakes ({snakes.length})
-            </h3>
+            <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">🐍 Snakes</p>
             <div className="flex flex-wrap gap-2">
               {snakes.map((p) => (
-                <div key={p.id} className="flex items-center gap-1.5 glass rounded-xl px-3 py-1.5">
+                <div key={p.id} className="flex items-center gap-1.5 glass rounded-xl px-2.5 py-1.5">
                   <span>{p.avatar}</span>
-                  <span className="text-sm text-red-300">{p.username}</span>
-                  {!p.isAlive && <span className="text-xs">💀</span>}
+                  <span className="text-xs text-red-300">{p.username}</span>
+                  {!p.isAlive && <span className="text-[10px]">💀</span>}
                 </div>
               ))}
+              {snakes.length === 0 && <span className="text-xs text-white/30">No snakes?!</span>}
             </div>
           </div>
-
           <div>
-            <h3 className="text-xs uppercase tracking-wider text-white/50 mb-3">
-              👤 Villagers ({villagers.length})
-            </h3>
+            <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">👤 Humans</p>
             <div className="flex flex-wrap gap-2">
-              {villagers.map((p) => (
-                <div key={p.id} className="flex items-center gap-1.5 glass rounded-xl px-3 py-1.5">
+              {humans.map((p) => (
+                <div key={p.id} className="flex items-center gap-1.5 glass rounded-xl px-2.5 py-1.5">
                   <span>{p.avatar}</span>
-                  <span className="text-sm text-green-300">{p.username}</span>
-                  {!p.isAlive && <span className="text-xs">💀</span>}
-                  {p.role?.type === 'seer' && <span className="text-xs">🔮</span>}
+                  <span className="text-xs text-green-300">{p.username}</span>
+                  {p.role?.type === 'mongoose' && <span className="text-[10px]">🦡</span>}
+                  {!p.isAlive && <span className="text-[10px]">💀</span>}
                 </div>
               ))}
             </div>
           </div>
         </motion.div>
 
-        {/* Vote history summary */}
+        {/* Vote history */}
         {gameState.roundHistory.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.95 }}
             className="glass rounded-2xl p-4"
           >
-            <h3 className="text-xs uppercase tracking-wider text-white/50 mb-3">Vote History</h3>
-            <div className="space-y-2">
-              {gameState.roundHistory.map((round) => (
-                <div key={round.round} className="flex items-center justify-between text-sm">
-                  <span className="text-white/50">Round {round.round}</span>
-                  <span className="text-white/80">
-                    {round.result ? (
-                      <>
-                        <span className="text-red-400">{round.result.targetName}</span>
-                        <span className="text-white/50"> eliminated ({round.result.voteCount} votes)</span>
-                      </>
-                    ) : (
-                      <span className="text-white/40">No elimination</span>
-                    )}
-                  </span>
+            <p className="text-[10px] text-white/30 uppercase tracking-wider mb-2">Elimination History</p>
+            <div className="space-y-1">
+              {gameState.roundHistory.map((r) => (
+                <div key={r.round} className="flex justify-between text-xs">
+                  <span className="text-white/40">Round {r.round}</span>
+                  {r.result
+                    ? <span><span className="text-red-400 font-medium">{r.result.targetName}</span> <span className="text-white/40">eliminated</span></span>
+                    : <span className="text-white/30">No elimination</span>
+                  }
                 </div>
               ))}
             </div>
           </motion.div>
         )}
 
-        {/* Actions */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.1 }}
+          transition={{ delay: 1.05 }}
           className="flex gap-3"
         >
-          <Button variant="secondary" size="lg" onClick={onLeave} className="flex-1">
-            Leave
-          </Button>
-          <Button variant="primary" size="lg" onClick={onPlayAgain} className="flex-1">
-            Play Again
-          </Button>
+          <Button variant="secondary" size="lg" onClick={onLeave} className="flex-1">Leave</Button>
+          <Button variant="primary" size="lg" onClick={onPlayAgain} className="flex-1">Play Again</Button>
         </motion.div>
       </div>
     </motion.div>

@@ -16,7 +16,7 @@ export function OverviewPanel({ adminState }: OverviewPanelProps) {
     { label: 'Active Games', value: analytics?.activeGames ?? 0, icon: '🎮', color: 'text-green-400' },
     { label: 'Total Players', value: analytics?.totalPlayers ?? 0, icon: '👥', color: 'text-blue-400' },
     { label: 'Total Games', value: analytics?.totalGames ?? 0, icon: '📊', color: 'text-purple-400' },
-    { label: 'Villager Wins', value: analytics?.villagerWins ?? 0, icon: '🏆', color: 'text-yellow-400' },
+    { label: 'Human Wins', value: analytics?.humanWins ?? 0, icon: '🏆', color: 'text-yellow-400' },
     { label: 'Snake Wins', value: analytics?.snakeWins ?? 0, icon: '🐍', color: 'text-red-400' },
     {
       label: 'Avg Duration',
@@ -63,22 +63,22 @@ export function OverviewPanel({ adminState }: OverviewPanelProps) {
       </div>
 
       {/* Win rate bar */}
-      {analytics && (analytics.villagerWins + analytics.snakeWins) > 0 && (
+      {analytics && (analytics.humanWins + analytics.snakeWins) > 0 && (
         <div className="glass rounded-2xl p-4">
           <h3 className="text-sm font-semibold text-white/70 mb-3">Win Distribution</h3>
           <div className="flex gap-2 items-center">
-            <span className="text-xs text-green-400 w-20">Villagers</span>
+            <span className="text-xs text-green-400 w-20">Humans</span>
             <div className="flex-1 h-3 bg-white/10 rounded-full overflow-hidden">
               <motion.div
                 className="h-full bg-gradient-to-r from-green-500 to-teal-500 rounded-full"
                 initial={{ width: 0 }}
                 animate={{
-                  width: `${(analytics.villagerWins / (analytics.villagerWins + analytics.snakeWins)) * 100}%`,
+                  width: `${(analytics.humanWins / (analytics.humanWins + analytics.snakeWins)) * 100}%`,
                 }}
                 transition={{ duration: 1, delay: 0.3 }}
               />
             </div>
-            <span className="text-xs text-white/50 w-8">{analytics.villagerWins}</span>
+            <span className="text-xs text-white/50 w-8">{analytics.humanWins}</span>
           </div>
           <div className="flex gap-2 items-center mt-2">
             <span className="text-xs text-red-400 w-20">Snakes</span>
@@ -87,7 +87,7 @@ export function OverviewPanel({ adminState }: OverviewPanelProps) {
                 className="h-full bg-gradient-to-r from-red-500 to-rose-600 rounded-full"
                 initial={{ width: 0 }}
                 animate={{
-                  width: `${(analytics.snakeWins / (analytics.villagerWins + analytics.snakeWins)) * 100}%`,
+                  width: `${(analytics.snakeWins / (analytics.humanWins + analytics.snakeWins)) * 100}%`,
                 }}
                 transition={{ duration: 1, delay: 0.4 }}
               />
