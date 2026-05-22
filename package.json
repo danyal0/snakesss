@@ -1,0 +1,22 @@
+{
+  "name": "snakesss",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=apps/server\" \"npm run dev --workspace=apps/web\" \"npm run dev --workspace=apps/admin\"",
+    "build": "npm run build --workspace=packages/shared-types && npm run build --workspace=packages/game-engine && npm run build --workspace=apps/server && npm run build --workspace=apps/web && npm run build --workspace=apps/admin",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
