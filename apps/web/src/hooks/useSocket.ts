@@ -11,8 +11,9 @@ import type {
 import { useGameStore } from '../store/gameStore';
 import {
   applyRoomIdentity,
+  getRoomIdFromPath,
   loadSession,
-  resolvePlayerId,
+  syncPlayerIdentityFromState,
   saveSession,
 } from './useSession';
 
@@ -21,6 +22,7 @@ type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 const SERVER_URL = import.meta.env['VITE_SERVER_URL'] ?? '';
 
 let _socket: AppSocket | null = null;
+let _joinInFlight: string | null = null;
 
 export function getSocket(): AppSocket {
   if (!_socket) {
@@ -32,6 +34,38 @@ export function getSocket(): AppSocket {
     });
   }
   return _socket;
+}
+
+/** Re-join room from saved session so chat/votes work after refresh. */
+function rejoinFromSession(socket: AppSocket, roomId: string): void {
+  const session = loadSession(roomId);
+  if (!session) return;
+  if (_joinInFlight === roomId) return;
+
+  _joinInFlight = roomId;
+  socket.emit(
+    'room:join',
+    {
+      roomId,
+      username: session.username,
+      avatar: session.avatar as AvatarEmoji,
+      asSpectator: false,
+    },
+    (result) => {
+      _joinInFlight = null;
+      if ('error' in result) {
+        console.warn('[Socket] rejoin failed:', result.error);
+        return;
+      }
+      applyRoomIdentity(
+        result,
+        roomId,
+        session.username,
+        session.avatar,
+        socket.id ?? null
+      );
+    }
+  );
 }
 
 let _listenersRegistered = false;
@@ -47,43 +81,23 @@ export function useSocketListeners(): void {
     socket.on('connect', () => {
       useGameStore.setState({ isConnected: true, socketId: socket.id ?? null });
 
-      const { gameState, username } = useGameStore.getState();
-      if (!gameState?.roomId || gameState.phase === 'lobby' || !username) return;
-
-      const session = loadSession(gameState.roomId);
-      if (!session) return;
-
-      socket.emit(
-        'room:join',
-        {
-          roomId: gameState.roomId,
-          username: session.username,
-          avatar: session.avatar as AvatarEmoji,
-          asSpectator: false,
-        },
-        (result) => {
-          if ('error' in result) return;
-          applyRoomIdentity(
-            result,
-            gameState.roomId,
-            session.username,
-            session.avatar,
-            socket.id ?? null
-          );
-        }
-      );
+      const roomId =
+        useGameStore.getState().gameState?.roomId ?? getRoomIdFromPath();
+      if (roomId) rejoinFromSession(socket, roomId);
     });
 
     socket.on('disconnect', () => {
       useGameStore.setState({ isConnected: false });
+      _joinInFlight = null;
     });
 
     socket.on('state:full', (state) => {
-      const store = useGameStore.getState();
-      store.setGameState(state);
-      if (store.username && !store.playerId) {
-        const playerId = resolvePlayerId(state, store.username, socket.id ?? null);
-        if (playerId) useGameStore.setState({ playerId });
+      useGameStore.getState().setGameState(state);
+      syncPlayerIdentityFromState(state, socket.id ?? null);
+
+      const session = loadSession(state.roomId);
+      if (session && !useGameStore.getState().playerId) {
+        rejoinFromSession(socket, state.roomId);
       }
     });
 
@@ -174,7 +188,13 @@ export function useSocket() {
         (roomId) => {
           if (roomId) {
             useGameStore.setState({ playerId: socket.id ?? null, username });
-            saveSession({ roomId, username, avatar, savedAt: Date.now() });
+            saveSession({
+              roomId,
+              username,
+              avatar,
+              playerId: socket.id ?? undefined,
+              savedAt: Date.now(),
+            });
             resolve(roomId);
           } else reject(new Error('Failed to create room'));
         }

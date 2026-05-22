@@ -21,6 +21,7 @@ import {
   selectHasVoted,
 } from '../store/gameStore';
 import { useNavigate } from 'react-router-dom';
+import { loadSession } from '../hooks/useSession';
 
 interface GameScreenProps {
   gameState: GameState;
@@ -42,13 +43,17 @@ export function GameScreen({ gameState }: GameScreenProps) {
   const alivePlayers = selectAlivePlayers(store);
 
   const me = playerId ? gameState.players.find((p) => p.id === playerId) : undefined;
-  const isAlive = me?.isAlive ?? true;
+  const isAlive = me?.isAlive ?? false;
   const isSpectator = me?.isSpectator ?? false;
   const isSnake = myRole?.type === 'snake';
   const needsRejoin = !playerId || !me;
+  const hasSavedSession = !!loadSession(gameState.roomId);
 
   const canChat =
-    gameState.phase === 'discussion' && isAlive && !isSpectator && !needsRejoin;
+    gameState.phase === 'discussion' &&
+    isAlive &&
+    !isSpectator &&
+    !needsRejoin;
 
   // Unread chat badge
   const [lastReadCount, setLastReadCount] = useState(0);

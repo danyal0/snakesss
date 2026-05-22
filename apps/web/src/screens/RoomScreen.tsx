@@ -19,26 +19,20 @@ export function RoomScreen() {
   const isConnected = useGameStore((s) => s.isConnected);
   const playerId = useGameStore((s) => s.playerId);
   const [joinError, setJoinError] = useState('');
-  const hasAttemptedJoin = useRef(false);
+  const spectateAttempted = useRef(false);
 
   useEffect(() => {
     if (!roomId || !isConnected) return;
 
-    if (
-      gameState?.roomId === roomId &&
-      playerId &&
-      isRegisteredPlayer(gameState, playerId)
-    ) {
-      return;
-    }
+    const session = loadSession(roomId);
+    const registered =
+      gameState?.roomId === roomId && isRegisteredPlayer(gameState, playerId);
 
-    if (hasAttemptedJoin.current) return;
+    if (registered) return;
 
     const socket = getSocket();
-    const session = loadSession(roomId);
 
     if (session) {
-      hasAttemptedJoin.current = true;
       socket.emit(
         'room:join',
         {
@@ -62,8 +56,11 @@ export function RoomScreen() {
           }
         }
       );
-    } else {
-      hasAttemptedJoin.current = true;
+      return;
+    }
+
+    if (!spectateAttempted.current) {
+      spectateAttempted.current = true;
       socket.emit('spectate:room', roomId);
     }
   }, [roomId, isConnected, gameState?.roomId, playerId]);
@@ -97,6 +94,11 @@ export function RoomScreen() {
         <p className="text-xs text-white/25">
           {roomId && loadSession(roomId) ? 'Restoring your session…' : 'Getting room state…'}
         </p>
+        {!loadSession(roomId ?? '') && (
+          <p className="text-xs text-amber-400/80 text-center max-w-xs">
+            No saved session — chat and votes only work if you re-join from home with the same name.
+          </p>
+        )}
         <button
           onClick={() => navigate('/')}
           className="text-xs text-white/30 hover:text-white/60 mt-4 transition-colors"

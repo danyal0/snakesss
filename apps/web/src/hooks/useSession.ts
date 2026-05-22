@@ -10,6 +10,7 @@ export interface StoredSession {
   roomId: string;
   username: string;
   avatar: string;
+  playerId?: string;
   savedAt: number;
 }
 
@@ -47,12 +48,24 @@ export function clearSession(roomId: string): void {
   } catch {}
 }
 
+/** Read room id from `/room/:roomId` when on a room page (works before React Router mounts). */
+export function getRoomIdFromPath(): string | null {
+  if (typeof window === 'undefined') return null;
+  const match = window.location.pathname.match(/\/room\/([^/]+)/i);
+  return match?.[1]?.toUpperCase() ?? null;
+}
+
 /** Match server player slot by username (stable across socket reconnects). */
 export function resolvePlayerId(
   state: GameState,
   username: string,
-  fallbackSocketId: string | null
+  fallbackSocketId: string | null,
+  savedPlayerId?: string | null
 ): string | null {
+  if (savedPlayerId) {
+    const byId = state.players.find((p) => p.id === savedPlayerId && !p.isSpectator);
+    if (byId) return byId.id;
+  }
   const me = state.players.find(
     (p) =>
       p.username.toLowerCase().trim() === username.toLowerCase().trim() &&
@@ -78,7 +91,45 @@ export function applyRoomIdentity(
   avatar: string,
   socketId: string | null
 ): void {
-  const playerId = resolvePlayerId(state, username, socketId);
+  const session = loadSession(roomId);
+  const playerId = resolvePlayerId(
+    state,
+    username,
+    socketId,
+    session?.playerId
+  );
   useGameStore.setState({ playerId, username, gameState: state });
-  saveSession({ roomId, username, avatar, savedAt: Date.now() });
+  saveSession({
+    roomId,
+    username,
+    avatar,
+    playerId: playerId ?? undefined,
+    savedAt: Date.now(),
+  });
+}
+
+/** Sync playerId from session + game state (safe to call on every state:full). */
+export function syncPlayerIdentityFromState(
+  state: GameState,
+  socketId: string | null
+): void {
+  const session = loadSession(state.roomId);
+  if (!session) return;
+
+  const store = useGameStore.getState();
+  const playerId = resolvePlayerId(
+    state,
+    session.username,
+    socketId,
+    session.playerId
+  );
+
+  if (!playerId || !isRegisteredPlayer(state, playerId)) return;
+
+  if (store.playerId !== playerId || store.username !== session.username) {
+    useGameStore.setState({
+      playerId,
+      username: session.username,
+    });
+  }
 }
