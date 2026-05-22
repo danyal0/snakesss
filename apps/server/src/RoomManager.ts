@@ -135,15 +135,8 @@ export class RoomManager {
     const botName = botNames[Math.floor(Math.random() * botNames.length)] + '_AI';
     const botAvatar = botAvatars[Math.floor(Math.random() * botAvatars.length)];
 
-    const result = room.engine.addPlayer(botId, botName, botAvatar, false, true);
+    const result = room.engine.addPlayer(botId, botName, botAvatar, false, true, persona);
     if (!result.success) return null;
-
-    // Set bot persona
-    const state = room.engine.getState();
-    const player = state.players.find((p) => p.id === botId);
-    if (player) {
-      (player as typeof player & { botPersona: BotPersona }).botPersona = persona;
-    }
 
     return botId;
   }

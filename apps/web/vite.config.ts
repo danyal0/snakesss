@@ -29,6 +29,11 @@ export default defineConfig({
         target: 'http://localhost:3001',
         ws: true,
       },
+      // Proxy /admin/* to the admin app dev server
+      '/admin': {
+        target: 'http://localhost:5174',
+        changeOrigin: true,
+      },
     },
   },
   resolve: {

@@ -14,6 +14,7 @@ export default function App() {
         <Route path="/" element={<HomeScreen />} />
         <Route path="/room/:roomId" element={<RoomScreen />} />
         <Route path="/rooms" element={<PublicRoomsScreen />} />
+        {/* /admin is served by the admin app (proxied in dev, static in prod) */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

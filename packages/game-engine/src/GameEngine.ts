@@ -110,7 +110,8 @@ export class GameEngine {
     username: string,
     avatar: AvatarEmoji,
     asSpectator: boolean,
-    isBot = false
+    isBot = false,
+    botPersona?: import('@snakesss/shared-types').BotPersona
   ): { success: boolean; error?: string } {
     const { players, settings, phase } = this.state;
 
@@ -138,6 +139,7 @@ export class GameEngine {
       username,
       avatar,
       isBot,
+      botPersona,
       isSpectator: asSpectator,
       isRoomManager: false,
       isConnected: true,
