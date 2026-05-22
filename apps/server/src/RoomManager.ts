@@ -22,6 +22,11 @@ interface RoomEntry {
   botEngine: BotDecisionEngine;
   socketIds: Map<string, string>; // playerId -> socketId
   bannedIds: Set<string>;
+  bannedUsernames: Set<string>;
+}
+
+function normalizeUsername(username: string): string {
+  return username.toLowerCase().trim();
 }
 
 interface CompletedGame {
@@ -82,6 +87,7 @@ export class RoomManager {
       botEngine,
       socketIds: new Map(),
       bannedIds: new Set(),
+      bannedUsernames: new Set(),
     });
 
     return roomId;
@@ -111,14 +117,20 @@ export class RoomManager {
     return this.rooms.get(roomId)?.socketIds.get(playerId);
   }
 
-  isBanned(roomId: string, playerId: string): boolean {
-    return this.rooms.get(roomId)?.bannedIds.has(playerId) ?? false;
+  isBanned(roomId: string, playerId?: string, username?: string): boolean {
+    const room = this.rooms.get(roomId);
+    if (!room) return false;
+    if (playerId && room.bannedIds.has(playerId)) return true;
+    if (username && room.bannedUsernames.has(normalizeUsername(username))) return true;
+    return false;
   }
 
   banPlayer(roomId: string, playerId: string): void {
     const room = this.rooms.get(roomId);
     if (room) {
       room.bannedIds.add(playerId);
+      const player = room.engine.getState().players.find((p) => p.id === playerId);
+      if (player) room.bannedUsernames.add(normalizeUsername(player.username));
       room.engine.kickPlayer(playerId);
     }
   }

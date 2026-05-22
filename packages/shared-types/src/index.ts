@@ -31,7 +31,7 @@ export interface PlayerAnswer {
   playerAvatar: AvatarEmoji;
   answerIndex: AnswerIndex;
   isCorrect: boolean;
-  role: RoleType;
+  role?: RoleType;
 }
 
 export interface RoundScore {
@@ -224,7 +224,8 @@ export interface GameState {
   players: Player[];
   // Quiz
   currentQuestion: QuizQuestion | null;
-  answers: Record<string, AnswerIndex>;          // playerId → answerIndex (hidden during question)
+  answers: Record<string, AnswerIndex>;
+  answeredPlayerIds?: string[];
   answersRevealed: PlayerAnswer[];               // shown after reveal
   roundScores: Record<number, RoundScore[]>;     // round → scores
   // Elimination
@@ -312,7 +313,11 @@ export interface ServerToClientEvents {
   'quiz:reveal': (answers: PlayerAnswer[], correctIndex: AnswerIndex, scores: RoundScore[]) => void;
   'chat:message': (message: ChatMessage) => void;
   'chat:typing': (indicator: TypingIndicator) => void;
-  'vote:update': (votes: Record<string, string>) => void;
+  'vote:update': (
+    voteCounts: Record<string, number>,
+    castCount: number,
+    totalVoters: number
+  ) => void;
   'round:result': (result: RoundVotes) => void;
   'game:ended': (winner: WinCondition, scores: Player[]) => void;
   'error': (message: string) => void;

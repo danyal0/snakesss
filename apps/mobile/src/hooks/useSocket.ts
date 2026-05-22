@@ -31,7 +31,7 @@ export function useSocket() {
     s.on('player:role', (role) => store.setMyRole(role));
     s.on('chat:message', (msg) => store.addMessage(msg));
     s.on('chat:typing', (ind) => store.setTyping(ind));
-    s.on('vote:update', (votes) => store.updateVotes(votes));
+    s.on('vote:update', (voteCounts) => store.updateVoteTally(voteCounts));
     s.on('game:ended', (winner) => store.setWinner(winner));
     s.on('phase:changed', (phase, endsAt) => store.patchGameState({ phase, phaseEndsAt: endsAt }));
 

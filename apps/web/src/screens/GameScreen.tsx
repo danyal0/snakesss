@@ -123,10 +123,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
 
   const phase = phaseInfo[gameState.phase] ?? phaseInfo['lobby']!;
 
-  const voteCounts: Record<string, number> = {};
-  Object.values(gameState.votes).forEach((tid) => {
-    voteCounts[tid] = (voteCounts[tid] ?? 0) + 1;
-  });
+  const voteCounts = store.voteTally;
 
   // Is this a full-screen phase?
   const isQuizPhase = gameState.phase === 'question' || gameState.phase === 'answer_reveal';
@@ -209,7 +206,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                   )}
 
                   {/* Answered checkmark */}
-                  {gameState.phase === 'question' && player.id in gameState.answers && (
+                  {gameState.phase === 'question' && gameState.answeredPlayerIds?.includes(player.id) && (
                     <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow">
                       ✓
                     </div>
@@ -239,7 +236,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
               phaseEndsAt={gameState.phaseEndsAt}
               hasSubmitted={store.hasSubmittedAnswer}
               submittedAnswer={
-                playerId && playerId in gameState.answers
+                playerId && gameState.answers[playerId] !== undefined
                   ? gameState.answers[playerId]!
                   : null
               }
@@ -353,6 +350,8 @@ export function GameScreen({ gameState }: GameScreenProps) {
                           myPlayerId={playerId}
                           canVote={canVote}
                           hasVoted={hasVoted}
+                          voteTally={store.voteTally}
+                          myVoteTarget={store.myVoteTarget}
                           onVote={handleVote}
                         />
                       ) : (

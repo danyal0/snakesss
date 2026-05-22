@@ -10,20 +10,17 @@ interface VotingPanelProps {
   myPlayerId: string | null;
   canVote: boolean;
   hasVoted: boolean;
+  voteTally: Record<string, number>;
+  myVoteTarget: string | null;
   onVote: (targetId: string) => void;
 }
 
-export function VotingPanel({ gameState, myPlayerId, canVote, hasVoted, onVote }: VotingPanelProps) {
+export function VotingPanel({ gameState, myPlayerId, canVote, hasVoted, voteTally, myVoteTarget, onVote }: VotingPanelProps) {
   const alivePlayers = gameState.players.filter((p) => p.isAlive && !p.isSpectator);
 
-  // Count votes per target
-  const voteCounts: Record<string, number> = {};
-  Object.values(gameState.votes).forEach((targetId) => {
-    voteCounts[targetId] = (voteCounts[targetId] ?? 0) + 1;
-  });
-
-  const myVote = myPlayerId ? gameState.votes[myPlayerId] : null;
-  const totalVotes = Object.keys(gameState.votes).length;
+  const voteCounts = voteTally;
+  const myVote = myVoteTarget;
+  const totalVotes = Object.values(voteCounts).reduce((sum, n) => sum + n, 0);
   const totalVoters = alivePlayers.length;
 
   return (

@@ -15,11 +15,15 @@ export function syncEphemeralFromGameState(
 } {
   const alive = state.players.filter((p) => p.isAlive && !p.isSpectator);
   const answerTotal = alive.length;
-  const answerCount = Object.keys(state.answers).length;
+  const answerCount =
+    state.answeredPlayerIds?.length ?? Object.keys(state.answers).length;
 
   if (state.phase === 'question') {
     return {
-      hasSubmittedAnswer: !!(playerId && playerId in state.answers),
+      hasSubmittedAnswer: !!(
+        playerId &&
+        (state.answeredPlayerIds?.includes(playerId) ?? playerId in state.answers)
+      ),
       answerCount,
       answerTotal,
       quizRevealAnswers: [],

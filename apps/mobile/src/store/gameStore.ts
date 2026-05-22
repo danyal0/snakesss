@@ -18,7 +18,7 @@ interface MobileGameStore {
   patchGameState: (p: Partial<GameState>) => void;
   setMyRole: (r: Role) => void;
   addMessage: (m: ChatMessage) => void;
-  updateVotes: (v: Record<string, string>) => void;
+  updateVoteTally: (v: Record<string, string>) => void;
   setTyping: (t: TypingIndicator) => void;
   setWinner: (w: WinCondition) => void;
   setShowRoleReveal: (v: boolean) => void;
@@ -44,7 +44,7 @@ export const useGameStore = create<MobileGameStore>((set) => ({
   addMessage: (m) => set((st) => ({
     gameState: st.gameState ? { ...st.gameState, chat: [...st.gameState.chat, m] } : null,
   })),
-  updateVotes: (v) => set((st) => ({ gameState: st.gameState ? { ...st.gameState, votes: v } : null })),
+  updateVoteTally: (v) => set((st) => ({ gameState: st.gameState ? { ...st.gameState, votes: v } : null })),
   setTyping: (t) => set((st) => {
     const filtered = st.typingIndicators.filter((x) => x.playerId !== t.playerId);
     return { typingIndicators: t.isTyping ? [...filtered, t] : filtered };

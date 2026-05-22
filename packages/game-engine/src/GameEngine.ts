@@ -19,6 +19,7 @@ import { assignRoles, checkWinCondition, revealRole, calculateRoundScores } from
 import { buildRoundVotes } from './voting';
 import { generateId, generateRoomCode } from './utils';
 import { getRandomQuestion, generateAIQuestion } from './questions';
+import { isTimedPhase, sanitizePublicState } from './publicState';
 
 export interface CreateRoomOptions {
   managerId: string;
@@ -96,6 +97,13 @@ export class GameEngine {
   // ─── State Access ─────────────────────────────────────────────────────────
 
   getState(): GameState { return { ...this.state }; }
+
+  getPublicState(): GameState {
+    const answeredIds =
+      this.state.phase === 'question' ? Array.from(this.answerMap.keys()) : undefined;
+    return sanitizePublicState(this.getState(), answeredIds);
+  }
+
   getRole(playerId: string): Role | undefined { return this.roleMap.get(playerId); }
   getAllRoles(): Map<string, Role> { return new Map(this.roleMap); }
   getRoomId(): string { return this.state.roomId; }
@@ -250,10 +258,6 @@ export class GameEngine {
     if (this.answerMap.has(playerId)) return { success: false }; // already answered
 
     this.answerMap.set(playerId, answerIndex);
-    this.state = {
-      ...this.state,
-      answers: { ...this.state.answers, [playerId]: answerIndex },
-    };
     this.emit('answer_submitted', { playerId });
     this.notifyStateChange();
 
@@ -276,16 +280,19 @@ export class GameEngine {
     // Build revealed answers
     const answersRevealed: PlayerAnswer[] = alivePlayers.map((player) => {
       const answerIndex = this.answerMap.get(player.id) ?? 0;
-      const role = this.roleMap.get(player.id);
       return {
         playerId: player.id,
         playerName: player.username,
         playerAvatar: player.avatar,
         answerIndex,
         isCorrect: answerIndex === question.correctIndex,
-        role: role?.type ?? 'human',
       };
     });
+
+    const revealedAnswers: Record<string, AnswerIndex> = {};
+    for (const [pid, idx] of this.answerMap.entries()) {
+      revealedAnswers[pid] = idx;
+    }
 
     // Calculate scores
     const scoreDeltas = calculateRoundScores(
@@ -309,6 +316,7 @@ export class GameEngine {
     this.state = {
       ...this.state,
       phase: 'answer_reveal',
+      answers: revealedAnswers,
       answersRevealed,
       players: updatedPlayers,
       roundScores: {
@@ -485,8 +493,26 @@ export class GameEngine {
 
   // ─── Admin Controls ───────────────────────────────────────────────────────
 
-  pause(): void { this.state = { ...this.state, isPaused: true }; this.clearPhaseTimer(); this.notifyStateChange(); }
-  resume(): void { this.state = { ...this.state, isPaused: false }; this.notifyStateChange(); }
+  pause(): void {
+    this.state = { ...this.state, isPaused: true };
+    this.clearPhaseTimer();
+    this.notifyStateChange();
+  }
+
+  resume(): void {
+    if (!this.state.isPaused) return;
+    this.state = { ...this.state, isPaused: false };
+    const { phase, phaseEndsAt } = this.state;
+    if (phaseEndsAt && isTimedPhase(phase)) {
+      const remaining = Math.max(0, phaseEndsAt - Date.now());
+      if (remaining > 0) {
+        this.schedulePhaseEnd(phase, remaining);
+      } else {
+        this.onPhaseEnd?.(phase);
+      }
+    }
+    this.notifyStateChange();
+  }
   forcePhase(phase: GamePhase): void {
     if (phase === 'discussion') this.transitionToDiscussion();
     else if (phase === 'voting') this.transitionToVoting();
@@ -526,7 +552,7 @@ export class GameEngine {
   }
 
   private notifyStateChange(): void {
-    this.onStateChange?.({ ...this.state });
+    this.onStateChange?.(this.getPublicState());
   }
 
   destroy(): void { this.clearPhaseTimer(); }

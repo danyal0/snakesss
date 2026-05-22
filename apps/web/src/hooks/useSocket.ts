@@ -135,8 +135,8 @@ export function useSocketListeners(): void {
       useGameStore.getState().setTyping(indicator);
     });
 
-    socket.on('vote:update', (votes) => {
-      useGameStore.getState().updateVotes(votes);
+    socket.on('vote:update', (voteCounts) => {
+      useGameStore.getState().updateVoteTally(voteCounts);
     });
 
     socket.on('round:result', (result) => {
@@ -149,7 +149,9 @@ export function useSocketListeners(): void {
     });
 
     socket.on('phase:changed', (phase, endsAt) => {
-      useGameStore.getState().patchGameState({ phase, phaseEndsAt: endsAt });
+      const store = useGameStore.getState();
+      store.patchGameState({ phase, phaseEndsAt: endsAt });
+      if (phase === 'voting') store.clearVoteState();
     });
 
     socket.on('player:joined', (player) => {
@@ -220,7 +222,10 @@ export function useSocket() {
     socket.emit('chat:send', { content, type });
   };
 
-  const castVote = (targetId: string) => { socket.emit('vote:cast', { targetId }); };
+  const castVote = (targetId: string) => {
+    socket.emit('vote:cast', { targetId });
+    useGameStore.getState().setMyVote(targetId);
+  };
 
   const startGame = () => { socket.emit('room:start'); };
 
@@ -255,12 +260,6 @@ export function useSocket() {
     }, 2000);
   };
 
-  const adminAction = (
-    action: 'kick' | 'ban' | 'inject_bot' | 'pause' | 'resume' | 'edit_role',
-    targetId?: string,
-    data?: Record<string, unknown>
-  ) => { socket.emit('admin:action', { action, targetId, data }); };
-
   return {
     socket,
     createRoom,
@@ -272,7 +271,6 @@ export function useSocket() {
     updateSettings,
     addBot,
     kickPlayerFromRoom,
-    submitAnswer,
-    adminAction,
+    submitAnswer
   };
 }

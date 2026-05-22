@@ -8,11 +8,13 @@ import {
   AnswerIndex,
   getOptimalRoleDistribution,
 } from '@snakesss/shared-types';
+import { buildVoteTally, stripAnswerRoles } from '@snakesss/game-engine';
 import { RoomManager } from './RoomManager';
-import { verifyAdminToken } from './auth';
 import { leaderboard } from './LeaderboardStore';
+import { clearRoomBotTimers, scheduleRoomBotTimeout } from './botTimers';
 
 type AppSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
+type AdminSocket = AppSocket & { isAdmin?: boolean };
 
 interface SocketMeta {
   playerId?: string;
@@ -21,13 +23,40 @@ interface SocketMeta {
 
 const socketMeta = new WeakMap<AppSocket, SocketMeta>();
 
+function emitPublicState(
+  roomId: string,
+  io: Server<ClientToServerEvents, ServerToClientEvents>,
+  roomManager: RoomManager
+): void {
+  const engine = roomManager.getEngine(roomId);
+  if (!engine) return;
+  io.to(`room:${roomId}`).emit('state:full', engine.getPublicState());
+}
+
+function emitVoteTally(
+  roomId: string,
+  io: Server<ClientToServerEvents, ServerToClientEvents>,
+  roomManager: RoomManager
+): void {
+  const engine = roomManager.getEngine(roomId);
+  if (!engine) return;
+  const internal = engine.getState();
+  io.to(`room:${roomId}`).emit(
+    'vote:update',
+    buildVoteTally(internal.votes),
+    Object.keys(internal.votes).length,
+    internal.players.filter((p) => p.isAlive && !p.isSpectator).length
+  );
+}
+
+
 export function registerSocketHandlers(
   io: Server<ClientToServerEvents, ServerToClientEvents>,
   roomManager: RoomManager
 ): void {
   // Broadcast state changes — but do NOT emit player:role here (causes repeated role reveals)
   roomManager.onStateChanged((roomId, state) => {
-    io.to(`room:${roomId}`).emit('state:full', state);
+    emitPublicState(roomId, io, roomManager);
   });
 
   roomManager.onPhaseEnded((roomId, phase) => {
@@ -51,8 +80,8 @@ export function registerSocketHandlers(
       socket.join(`room:${roomId}`);
       cb(roomId);
 
-      const state = roomManager.getEngine(roomId)?.getState();
-      if (state) socket.emit('state:full', state);
+      const engineOnCreate = roomManager.getEngine(roomId);
+      if (engineOnCreate) socket.emit('state:full', engineOnCreate.getPublicState());
 
       broadcastAdminState(io, roomManager);
     });
@@ -61,7 +90,7 @@ export function registerSocketHandlers(
     socket.on('room:join', (_payload: JoinRoomPayload, cb) => {
       const { roomId, username, avatar, asSpectator } = _payload;
 
-      if (roomManager.isBanned(roomId, socket.id)) {
+      if (roomManager.isBanned(roomId, undefined, username)) {
         cb({ error: 'You are banned from this room' });
         return;
       }
@@ -73,19 +102,25 @@ export function registerSocketHandlers(
       // When a player refreshes (new socket ID), match them by username so they
       // keep their role, manager status, and score.
       const existingPlayer = engine.getState().players.find(
-        (p) =>
-          p.username.toLowerCase().trim() === username.toLowerCase().trim() &&
-          !p.isSpectator
+        (p) => p.username.toLowerCase().trim() === username.toLowerCase().trim()
+          && !p.isSpectator
+          && !p.isConnected  // only restore disconnected slots
       );
 
       let effectivePlayerId = socket.id;
 
-      if (existingPlayer && !asSpectator) {
+      if (existingPlayer) {
+        // Restore the existing player slot with the new socket ID
         effectivePlayerId = existingPlayer.id;
         engine.reconnectPlayer(existingPlayer.id, socket.id);
       } else {
         const result = engine.addPlayer(socket.id, username, avatar, asSpectator);
         if (!result.success) { cb({ error: result.error ?? 'Failed to join' }); return; }
+      }
+
+      if (roomManager.isBanned(roomId, effectivePlayerId, username)) {
+        cb({ error: 'You are banned from this room' });
+        return;
       }
 
       const meta = socketMeta.get(socket)!;
@@ -95,9 +130,9 @@ export function registerSocketHandlers(
       roomManager.registerSocket(roomId, effectivePlayerId, socket.id);
       socket.join(`room:${roomId}`);
 
-      const state = engine.getState();
+      const state = engine.getPublicState();
       cb(state);
-      io.to(`room:${roomId}`).emit('state:full', state);
+      emitPublicState(roomId, io, roomManager);
 
       // Re-send private role to the (re)joining player
       const role = engine.getRole(effectivePlayerId);
@@ -164,7 +199,7 @@ export function registerSocketHandlers(
       const player = engine.getState().players.find((p) => p.id === meta.playerId);
       if (!player?.isRoomManager) return;
       engine.updateSettings(payload.settings);
-      io.to(`room:${meta.roomId}`).emit('state:full', engine.getState());
+      emitPublicState(meta.roomId, io, roomManager);
     });
 
     // ── Room: Add Bot ───────────────────────────────────────────────────────
@@ -207,7 +242,7 @@ export function registerSocketHandlers(
       // Broadcast answer count (not the answer itself) so others see progress
       const state = engine.getState();
       const totalAlive = state.players.filter((p) => p.isAlive && !p.isSpectator).length;
-      const answeredCount = Object.keys(state.answers).length;
+      const answeredCount = engine.getAnswerMap().size;
       io.to(`room:${meta.roomId}`).emit('quiz:answer_update', answeredCount, totalAlive);
     });
 
@@ -244,11 +279,16 @@ export function registerSocketHandlers(
       if (!engine) return;
       const result = engine.castVote(meta.playerId, payload.targetId);
       if (!result.success) { socket.emit('error', result.error ?? 'Vote failed'); return; }
-      io.to(`room:${meta.roomId}`).emit('vote:update', engine.getState().votes);
+      emitVoteTally(meta.roomId, io, roomManager);
     });
 
-    // ── Admin Action ────────────────────────────────────────────────────────
+    // ── Admin Action (authenticated admin sockets only) ─────────────────────
     socket.on('admin:action', (payload) => {
+      if (!(socket as AdminSocket).isAdmin) {
+        socket.emit('error', 'Unauthorized admin action');
+        return;
+      }
+
       const meta = socketMeta.get(socket) ?? {};
       const roomId = (payload.data?.['roomId'] as string) ?? meta.roomId;
       if (!roomId) return;
@@ -256,16 +296,26 @@ export function registerSocketHandlers(
       if (!engine) return;
 
       switch (payload.action) {
-        case 'kick': if (payload.targetId) engine.kickPlayer(payload.targetId); break;
-        case 'ban': if (payload.targetId) roomManager.banPlayer(roomId, payload.targetId); break;
+        case 'kick':
+          if (payload.targetId) engine.kickPlayer(payload.targetId);
+          break;
+        case 'ban':
+          if (payload.targetId) roomManager.banPlayer(roomId, payload.targetId);
+          break;
         case 'inject_bot': {
           const persona = payload.data?.['persona'] as string ?? 'chaotic_liar';
           roomManager.injectBot(roomId, persona as 'aggressive' | 'silent_strategist' | 'chaotic_liar');
           break;
         }
-        case 'pause': engine.pause(); io.to(`room:${roomId}`).emit('state:full', engine.getState()); break;
-        case 'resume': engine.resume(); io.to(`room:${roomId}`).emit('state:full', engine.getState()); break;
+        case 'pause':
+          clearRoomBotTimers(roomId);
+          engine.pause();
+          break;
+        case 'resume':
+          engine.resume();
+          break;
       }
+      emitPublicState(roomId, io, roomManager);
       broadcastAdminState(io, roomManager);
     });
 
@@ -273,7 +323,7 @@ export function registerSocketHandlers(
     socket.on('spectate:room', (roomId) => {
       socket.join(`room:${roomId}`);
       const engine = roomManager.getEngine(roomId);
-      if (engine) socket.emit('state:full', engine.getState());
+      if (engine) socket.emit('state:full', engine.getPublicState());
     });
 
     // ── Disconnect ──────────────────────────────────────────────────────────
@@ -349,12 +399,12 @@ async function handlePhaseTransition(
     }
 
     case 'question': {
-      // Time ran out — fill missing answers with random for bots, skip for humans
       const currentState = engine.getState();
       const alivePlayers = currentState.players.filter((p) => p.isAlive && !p.isSpectator);
+      const answerMap = engine.getAnswerMap();
       for (const player of alivePlayers) {
-        if (!(player.id in currentState.answers)) {
-          const randomAnswer = (Math.floor(Math.random() * 3) as AnswerIndex);
+        if (!answerMap.has(player.id) && player.isBot) {
+          const randomAnswer = Math.floor(Math.random() * 3) as AnswerIndex;
           engine.submitAnswer(player.id, randomAnswer);
         }
       }
@@ -370,7 +420,7 @@ async function handlePhaseTransition(
       const revealState = engine.getState();
       if (revealState.currentQuestion) {
         io.to(`room:${roomId}`).emit('quiz:reveal',
-          revealState.answersRevealed,
+          stripAnswerRoles(revealState.answersRevealed),
           revealState.currentQuestion.correctIndex,
           revealState.roundScores[revealState.round] ?? []
         );
@@ -447,8 +497,6 @@ async function handlePhaseTransition(
             }
           });
         }
-        // Schedule bot answers
-        void scheduleBotAnswers(roomId, io, roomManager);
       }
       break;
     }
@@ -456,7 +504,9 @@ async function handlePhaseTransition(
     default: break;
   }
 
-  const updatedState = engine.getState();
+  const engineAfter = roomManager.getEngine(roomId);
+  if (!engineAfter) return;
+  const updatedState = engineAfter.getPublicState();
   io.to(`room:${roomId}`).emit('state:full', updatedState);
   io.to(`room:${roomId}`).emit('phase:changed', updatedState.phase, updatedState.phaseEndsAt);
 }
@@ -470,7 +520,9 @@ async function scheduleBotAnswers(
 ): Promise<void> {
   const engine = roomManager.getEngine(roomId);
   if (!engine) return;
+  clearRoomBotTimers(roomId);
   const state = engine.getState();
+  if (state.isPaused) return;
   const bots = state.players.filter((p) => p.isBot && p.isAlive && !p.isSpectator);
   const question = state.currentQuestion;
   if (!question) return;
@@ -479,43 +531,33 @@ async function scheduleBotAnswers(
     const role = engine.getRole(bot.id);
     const delay = 1500 + Math.random() * Math.min(state.settings.questionTimer * 600, 15000);
 
-    setTimeout(() => {
+    scheduleRoomBotTimeout(roomId, () => {
       const currentState = engine.getState();
-      if (currentState.phase !== 'question') return;
+      if (currentState.isPaused || currentState.phase !== 'question') return;
 
       let answer: AnswerIndex;
       if (role?.type === 'snake') {
-        // Snake: pick a WRONG answer (bluffing strategy)
-        const wrongAnswers = ([0, 1, 2] as AnswerIndex[]).filter(
-          (i) => i !== question.correctIndex
-        );
+        const wrongAnswers = ([0, 1, 2] as AnswerIndex[]).filter((i) => i !== question.correctIndex);
         answer = wrongAnswers[Math.floor(Math.random() * wrongAnswers.length)]!;
       } else {
-        // Human bot: try to answer correctly but might make mistakes
         const isCorrect = Math.random() < 0.65;
         if (isCorrect) {
           answer = question.correctIndex;
         } else {
-          const wrongAnswers = ([0, 1, 2] as AnswerIndex[]).filter(
-            (i) => i !== question.correctIndex
-          );
+          const wrongAnswers = ([0, 1, 2] as AnswerIndex[]).filter((i) => i !== question.correctIndex);
           answer = wrongAnswers[Math.floor(Math.random() * wrongAnswers.length)]!;
         }
       }
 
       const result = engine.submitAnswer(bot.id, answer);
       if (result.success) {
-        const updatedState = engine.getState();
-        const total = updatedState.players.filter((p) => p.isAlive && !p.isSpectator).length;
-        io.to(`room:${roomId}`).emit(
-          'quiz:answer_update',
-          Object.keys(updatedState.answers).length,
-          total
-        );
+        const total = engine.getState().players.filter((p) => p.isAlive && !p.isSpectator).length;
+        io.to(`room:${roomId}`).emit('quiz:answer_update', engine.getAnswerMap().size, total);
       }
     }, delay);
   }
 }
+
 
 async function scheduleBotChat(
   roomId: string,
@@ -526,7 +568,9 @@ async function scheduleBotChat(
   const botEngine = roomManager.getBotEngine(roomId);
   if (!engine || !botEngine) return;
 
+  clearRoomBotTimers(roomId);
   const state = engine.getState();
+  if (state.isPaused) return;
   const bots = state.players.filter((p) => p.isBot && p.isAlive && !p.isSpectator);
 
   for (const bot of bots) {
@@ -534,40 +578,43 @@ async function scheduleBotChat(
     if (!role) continue;
 
     const delay = 2000 + Math.random() * 10000;
-    setTimeout(async () => {
-      const current = engine.getState();
-      if (current.phase !== 'discussion') return;
+    scheduleRoomBotTimeout(roomId, () => {
+      void (async () => {
+        const current = engine.getState();
+        if (current.isPaused || current.phase !== 'discussion') return;
 
-      const accusedBy = current.chat
-        .filter((m) => m.round === current.round && m.content.toLowerCase().includes(bot.username.toLowerCase()))
-        .map((m) => m.playerName);
+        const accusedBy = current.chat
+          .filter((m) => m.round === current.round && m.content.toLowerCase().includes(bot.username.toLowerCase()))
+          .map((m) => m.playerName);
 
-      const decision = await botEngine.decideMessage(bot, role.type, current, accusedBy);
-      if (!decision) return;
+        const decision = await botEngine.decideMessage(bot, role.type, current, accusedBy);
+        if (!decision) return;
 
-      const check = engine.getState();
-      if (check.phase !== 'discussion') return;
+        const check = engine.getState();
+        if (check.isPaused || check.phase !== 'discussion') return;
 
-      io.to(`room:${roomId}`).emit('chat:typing', {
-        playerId: bot.id,
-        playerName: bot.username,
-        isTyping: true,
-      });
+        io.to(`room:${roomId}`).emit('chat:typing', {
+          playerId: bot.id,
+          playerName: bot.username,
+          isTyping: true,
+        });
 
-      setTimeout(() => {
-        const msg = engine.addMessage(bot.id, decision.message, 'chat');
-        if (msg) {
-          io.to(`room:${roomId}`).emit('chat:message', msg);
-          io.to(`room:${roomId}`).emit('chat:typing', {
-            playerId: bot.id,
-            playerName: bot.username,
-            isTyping: false,
-          });
-        }
-      }, decision.delay);
+        scheduleRoomBotTimeout(roomId, () => {
+          const msg = engine.addMessage(bot.id, decision.message, 'chat');
+          if (msg) {
+            io.to(`room:${roomId}`).emit('chat:message', msg);
+            io.to(`room:${roomId}`).emit('chat:typing', {
+              playerId: bot.id,
+              playerName: bot.username,
+              isTyping: false,
+            });
+          }
+        }, decision.delay);
+      })();
     }, delay);
   }
 }
+
 
 async function scheduleBotVotes(
   roomId: string,
@@ -578,7 +625,9 @@ async function scheduleBotVotes(
   const botEngine = roomManager.getBotEngine(roomId);
   if (!engine || !botEngine) return;
 
+  clearRoomBotTimers(roomId);
   const state = engine.getState();
+  if (state.isPaused) return;
   const bots = state.players.filter((p) => p.isBot && p.isAlive && !p.isSpectator);
 
   for (const bot of bots) {
@@ -586,24 +635,27 @@ async function scheduleBotVotes(
     if (!role) continue;
 
     const delay = 2000 + Math.random() * 12000;
-    setTimeout(async () => {
-      const current = engine.getState();
-      if (current.phase !== 'voting') return;
+    scheduleRoomBotTimeout(roomId, () => {
+      void (async () => {
+        const current = engine.getState();
+        if (current.isPaused || current.phase !== 'voting') return;
 
-      const snakeIds = Array.from(engine.getAllRoles().entries())
-        .filter(([, r]) => r.type === 'snake')
-        .map(([id]) => id);
+        const snakeIds = Array.from(engine.getAllRoles().entries())
+          .filter(([, r]) => r.type === 'snake')
+          .map(([id]) => id);
 
-      const targetId = await botEngine.decideVote(bot, role.type, current, snakeIds);
-      if (!targetId) return;
+        const targetId = await botEngine.decideVote(bot, role.type, current, snakeIds);
+        if (!targetId) return;
 
-      const result = engine.castVote(bot.id, targetId);
-      if (result.success) {
-        io.to(`room:${roomId}`).emit('vote:update', engine.getState().votes);
-      }
+        const result = engine.castVote(bot.id, targetId);
+        if (result.success) {
+          emitVoteTally(roomId, io, roomManager);
+        }
+      })();
     }, delay);
   }
 }
+
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -627,7 +679,7 @@ function handleDisconnect(
     roomManager.closeRoom(roomId);
   } else {
     io.to(`room:${roomId}`).emit('player:left', playerId);
-    io.to(`room:${roomId}`).emit('state:full', state);
+    emitPublicState(roomId, io, roomManager);
   }
   broadcastAdminState(io, roomManager);
 }

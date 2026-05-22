@@ -7,3 +7,9 @@ export type { AIProvider, AIContext } from './ai/AIBot';
 export { PERSONAS } from './ai/personas';
 export type { PersonaConfig } from './ai/personas';
 export { getRandomQuestion, generateAIQuestion, resetQuestionCycle } from './questions';
+export {
+  sanitizePublicState,
+  stripAnswerRoles,
+  buildVoteTally,
+  isTimedPhase,
+} from './publicState';
