@@ -10,7 +10,8 @@ import type {
   Player,
 } from '@snakesss/shared-types';
 import { useGameStore } from '../store/gameStore';
-import { saveSession } from './useSession';
+import { saveSession, loadSession } from './useSession';
+import type { AvatarEmoji } from '@snakesss/shared-types';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 

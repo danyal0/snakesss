@@ -30,9 +30,29 @@ export function AnswerReveal({
       setTimeout(() => setRevealStep(3), 2200),   // show scores
     ];
     return () => timers.forEach(clearTimeout);
-  }, [answers.length]);
+  }, [answers, correctIndex]);
 
-  if (!question || correctIndex === null) return null;
+  if (!question) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center p-6 gap-3 text-center">
+        <div className="text-4xl animate-pulse">⏳</div>
+        <p className="text-sm text-white/50">Loading results…</p>
+      </div>
+    );
+  }
+
+  if (correctIndex === null) {
+    return (
+      <div className="flex flex-col h-full p-4 gap-4 overflow-y-auto scrollbar-none">
+        <div className="glass rounded-2xl p-4 flex-shrink-0">
+          <p className="text-sm text-white/70 leading-relaxed text-center">{question.text}</p>
+        </div>
+        {answers.length > 0 && (
+          <p className="text-xs text-white/40 text-center">Revealing answers…</p>
+        )}
+      </div>
+    );
+  }
 
   const myAnswer = answers.find((a) => a.playerId === myPlayerId);
   const iGotItRight = myAnswer?.isCorrect ?? false;

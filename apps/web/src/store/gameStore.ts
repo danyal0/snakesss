@@ -12,6 +12,7 @@ import {
   RoundScore,
   AnswerIndex,
 } from '@snakesss/shared-types';
+import { syncEphemeralFromGameState } from './syncEphemeralState';
 
 interface GameStore {
   // Connection

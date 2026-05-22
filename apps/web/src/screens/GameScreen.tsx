@@ -247,9 +247,21 @@ export function GameScreen({ gameState }: GameScreenProps) {
           {gameState.phase === 'answer_reveal' && (
             <AnswerReveal
               question={gameState.currentQuestion}
-              answers={gameState.answersRevealed}
-              correctIndex={store.quizRevealCorrectIndex}
-              scores={store.quizRevealScores}
+              answers={
+                store.quizRevealAnswers.length > 0
+                  ? store.quizRevealAnswers
+                  : gameState.answersRevealed
+              }
+              correctIndex={
+                store.quizRevealCorrectIndex ??
+                gameState.currentQuestion?.correctIndex ??
+                null
+              }
+              scores={
+                store.quizRevealScores.length > 0
+                  ? store.quizRevealScores
+                  : (gameState.roundScores[gameState.round] ?? [])
+              }
               myPlayerId={playerId}
             />
           )}

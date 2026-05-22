@@ -99,7 +99,15 @@ app.use('/admin', express.static(adminDist, { index: false }));
 
 // ── WEB app ───────────────────────────────────────────────────────────────────
 app.use(express.static(webDist, { index: false }));
-app.get('*', (_req, res) => {
+app.get('*', (req, res, next) => {
+  // Safety net: never serve the game SPA for admin routes (PWA/misordered routes)
+  if (req.path.startsWith('/admin')) {
+    const adminIndex = path.join(adminDist, 'index.html');
+    res.sendFile(adminIndex, (err) => {
+      if (err) next(err);
+    });
+    return;
+  }
   res.sendFile(path.join(webDist, 'index.html'));
 });
 
