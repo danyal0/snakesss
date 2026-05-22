@@ -15,20 +15,13 @@ import {
 import { syncEphemeralFromGameState } from './syncEphemeralState';
 
 interface GameStore {
-  // Connection
   isConnected: boolean;
   socketId: string | null;
-
-  // Identity
   playerId: string | null;
   username: string | null;
-
-  // Game state mirror
   gameState: GameState | null;
   myRole: Role | null;
-
-  // Quiz state
-  snakeAnswer: AnswerIndex | null;    // only for snakes — the correct answer
+  snakeAnswer: AnswerIndex | null;
   hasSubmittedAnswer: boolean;
   answerCount: number;
   answerTotal: number;
@@ -36,19 +29,13 @@ interface GameStore {
   quizRevealCorrectIndex: AnswerIndex | null;
   quizRevealScores: RoundScore[];
   showQuizReveal: boolean;
-
-  // Socket error (auto-cleared)
   lastSocketError: string | null;
-
-  // UI overlays
   typingIndicators: TypingIndicator[];
   lastRoundResult: RoundVotes | null;
   winner: WinCondition;
   showRoleReveal: boolean;
   showEliminationReveal: boolean;
   eliminatedPlayer: Player | null;
-
-  // Actions
   setConnected: (v: boolean, id?: string) => void;
   setGameState: (s: GameState) => void;
   patchGameState: (p: Partial<GameState>) => void;
@@ -94,24 +81,35 @@ export const useGameStore = create<GameStore>()(
 
     setGameState: (s) =>
       set((st) => {
-        // When state:full arrives, merge chat to avoid losing locally-added messages
-        // and deduplicate by message ID
-        if (!st.gameState) return { gameState: s };
-        const existingIds = new Set(st.gameState.chat.map((c) => c.id));
-        const serverOnlyMsgs = s.chat.filter((c) => !existingIds.has(c.id));
-        const mergedChat = [...st.gameState.chat, ...serverOnlyMsgs]
-          .sort((a, b) => a.timestamp - b.timestamp);
-        // Use server state but with merged chat to avoid drops
-        return { gameState: { ...s, chat: mergedChat } };
+        let merged: GameState;
+        if (!st.gameState) {
+          merged = s;
+        } else {
+          const existingIds = new Set(st.gameState.chat.map((c) => c.id));
+          const serverOnlyMsgs = s.chat.filter((c) => !existingIds.has(c.id));
+          const mergedChat = [...st.gameState.chat, ...serverOnlyMsgs]
+            .sort((a, b) => a.timestamp - b.timestamp);
+          merged = { ...s, chat: mergedChat };
+        }
+        return {
+          gameState: merged,
+          ...syncEphemeralFromGameState(merged, st.playerId),
+        };
       }),
 
     patchGameState: (p) =>
-      set((st) => ({ gameState: st.gameState ? { ...st.gameState, ...p } : null })),
+      set((st) => {
+        if (!st.gameState) return { gameState: null };
+        const merged = { ...st.gameState, ...p };
+        return {
+          gameState: merged,
+          ...syncEphemeralFromGameState(merged, st.playerId),
+        };
+      }),
 
     setMyRole: (role) =>
       set((st) => ({
         myRole: role,
-        // Only show reveal if we didn't have a role before (first time)
         showRoleReveal: !st.myRole,
       })),
 
@@ -128,7 +126,6 @@ export const useGameStore = create<GameStore>()(
     addMessage: (m) =>
       set((st) => {
         if (!st.gameState) return {};
-        // Deduplicate by message ID — guards against state:full + chat:message race
         if (st.gameState.chat.some((c) => c.id === m.id)) return {};
         return { gameState: { ...st.gameState, chat: [...st.gameState.chat, m] } };
       }),
@@ -169,14 +166,12 @@ export const useGameStore = create<GameStore>()(
         lastRoundResult: null,
         winner: null,
         lastSocketError: null,
-      showRoleReveal: false,
+        showRoleReveal: false,
         showEliminationReveal: false,
         eliminatedPlayer: null,
       }),
   }))
 );
-
-// ─── Selectors ────────────────────────────────────────────────────────────────
 
 export const selectAlivePlayers = (state: GameStore) =>
   state.gameState?.players.filter((p) => p.isAlive && !p.isSpectator) ?? [];
