@@ -219,6 +219,8 @@ export interface ClientToServerEvents {
   'room:leave': () => void;
   'room:start': () => void;
   'room:settings:update': (payload: UpdateSettingsPayload) => void;
+  'room:add_bot': (persona: BotPersona, cb: (result: { botId: string } | { error: string }) => void) => void;
+  'room:kick': (targetId: string) => void;
   'chat:send': (payload: SendMessagePayload) => void;
   'chat:typing': (isTyping: boolean) => void;
   'vote:cast': (payload: CastVotePayload) => void;

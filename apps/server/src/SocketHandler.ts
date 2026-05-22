@@ -145,6 +145,40 @@ export function registerSocketHandlers(
       io.to(`room:${meta.roomId}`).emit('state:full', engine.getState());
     });
 
+    socket.on('room:add_bot', (persona, cb) => {
+      const meta = socketMeta.get(socket);
+      if (!meta?.roomId) { cb({ error: 'Not in a room' }); return; }
+
+      const engine = roomManager.getEngine(meta.roomId);
+      if (!engine) { cb({ error: 'Room not found' }); return; }
+
+      const state = engine.getState();
+      const player = state.players.find((p) => p.id === meta.playerId);
+      if (!player?.isRoomManager) { cb({ error: 'Only room manager can add bots' }); return; }
+
+      const botId = roomManager.injectBot(meta.roomId, persona);
+      if (!botId) { cb({ error: 'Could not add bot (room may be full or game started)' }); return; }
+
+      cb({ botId });
+      io.to(`room:${meta.roomId}`).emit('state:full', engine.getState());
+      broadcastAdminState(io, roomManager);
+    });
+
+    socket.on('room:kick', (targetId) => {
+      const meta = socketMeta.get(socket);
+      if (!meta?.roomId) return;
+
+      const engine = roomManager.getEngine(meta.roomId);
+      if (!engine) return;
+
+      const state = engine.getState();
+      const player = state.players.find((p) => p.id === meta.playerId);
+      if (!player?.isRoomManager) return;
+
+      engine.kickPlayer(targetId);
+      io.to(`room:${meta.roomId}`).emit('state:full', engine.getState());
+    });
+
     socket.on('chat:send', (payload) => {
       const meta = socketMeta.get(socket);
       if (!meta?.roomId || !meta?.playerId) return;
@@ -235,23 +269,34 @@ function handlePhaseTransition(
   if (state.isPaused) return;
 
   switch (endedPhase) {
-    case 'dealing':
+    case 'dealing': {
       engine.transitionToDiscussion();
-      scheduleBotChat(roomId, io, roomManager);
+      void scheduleBotChat(roomId, io, roomManager);
       break;
+    }
 
-    case 'discussion':
+    case 'discussion': {
       engine.transitionToVoting();
-      scheduleBotVotes(roomId, io, roomManager);
+      void scheduleBotVotes(roomId, io, roomManager);
       break;
+    }
 
-    case 'voting':
+    case 'voting': {
       engine.transitionToVoteReveal();
       break;
+    }
 
-    case 'vote_reveal':
+    case 'vote_reveal': {
+      // resolveVotes calls eliminatePlayer which schedules 'elimination' phase end
       engine.resolveVotes();
+      // Emit round result to clients
+      const votes = engine.getState().roundHistory;
+      const lastRound = votes[votes.length - 1];
+      if (lastRound) {
+        io.to(`room:${roomId}`).emit('round:result', lastRound);
+      }
       break;
+    }
 
     case 'elimination': {
       const winner = engine.evaluateWin();
@@ -259,17 +304,16 @@ function handlePhaseTransition(
         engine.endGame(winner);
         const finalState = engine.getState();
         io.to(`room:${roomId}`).emit('game:ended', winner, finalState.timeline);
-        const lastRound = finalState.roundHistory[finalState.roundHistory.length - 1];
-        if (lastRound) {
-          io.to(`room:${roomId}`).emit('round:result', lastRound);
-        }
       } else {
         engine.nextRound();
         engine.transitionToDiscussion();
-        scheduleBotChat(roomId, io, roomManager);
+        void scheduleBotChat(roomId, io, roomManager);
       }
       break;
     }
+
+    default:
+      break;
   }
 
   const updatedState = engine.getState();

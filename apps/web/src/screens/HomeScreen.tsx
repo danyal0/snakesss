@@ -12,6 +12,11 @@ import { useGameStore } from '../store/gameStore';
 export function HomeScreen() {
   const navigate = useNavigate();
   const { createRoom, joinRoom } = useSocket();
+  const resetStore = useGameStore((s) => s.reset);
+  
+  React.useEffect(() => {
+    resetStore();
+  }, [resetStore]);
   const isConnected = useGameStore((s) => s.isConnected);
 
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
