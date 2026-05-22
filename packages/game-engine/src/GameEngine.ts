@@ -434,7 +434,9 @@ export class GameEngine {
 
     this.state = { ...this.state, chat: [...this.state.chat, message] };
     this.emit('message_sent', { message });
-    this.notifyStateChange();
+    // Do NOT call notifyStateChange here — SocketHandler broadcasts chat:message directly.
+    // Emitting state:full for every chat message causes client to receive it before
+    // chat:message, then receive chat:message → duplicate message in UI.
     return message;
   }
 

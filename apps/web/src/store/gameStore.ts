@@ -86,7 +86,18 @@ export const useGameStore = create<GameStore>()(
 
     setConnected: (v, id) => set({ isConnected: v, socketId: id ?? null }),
 
-    setGameState: (s) => set({ gameState: s }),
+    setGameState: (s) =>
+      set((st) => {
+        // When state:full arrives, merge chat to avoid losing locally-added messages
+        // and deduplicate by message ID
+        if (!st.gameState) return { gameState: s };
+        const existingIds = new Set(st.gameState.chat.map((c) => c.id));
+        const serverOnlyMsgs = s.chat.filter((c) => !existingIds.has(c.id));
+        const mergedChat = [...st.gameState.chat, ...serverOnlyMsgs]
+          .sort((a, b) => a.timestamp - b.timestamp);
+        // Use server state but with merged chat to avoid drops
+        return { gameState: { ...s, chat: mergedChat } };
+      }),
 
     patchGameState: (p) =>
       set((st) => ({ gameState: st.gameState ? { ...st.gameState, ...p } : null })),
@@ -109,11 +120,12 @@ export const useGameStore = create<GameStore>()(
       }),
 
     addMessage: (m) =>
-      set((st) => ({
-        gameState: st.gameState
-          ? { ...st.gameState, chat: [...st.gameState.chat, m] }
-          : null,
-      })),
+      set((st) => {
+        if (!st.gameState) return {};
+        // Deduplicate by message ID — guards against state:full + chat:message race
+        if (st.gameState.chat.some((c) => c.id === m.id)) return {};
+        return { gameState: { ...st.gameState, chat: [...st.gameState.chat, m] } };
+      }),
 
     updateVotes: (v) =>
       set((st) => ({ gameState: st.gameState ? { ...st.gameState, votes: v } : null })),

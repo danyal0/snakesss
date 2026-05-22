@@ -19,14 +19,17 @@ const httpServer = createServer(app);
 
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: {
-    origin: [CLIENT_ORIGIN, ADMIN_ORIGIN, /\.railway\.app$/],
+    origin: [CLIENT_ORIGIN, ADMIN_ORIGIN, /\.railway\.app$/, /localhost/],
     credentials: true,
   },
   pingTimeout: 10000,
   pingInterval: 5000,
 });
 
-app.use(cors({ origin: [CLIENT_ORIGIN, ADMIN_ORIGIN, /\.railway\.app$/], credentials: true }));
+app.use(cors({
+  origin: [CLIENT_ORIGIN, ADMIN_ORIGIN, /\.railway\.app$/, /localhost/],
+  credentials: true,
+}));
 app.use(express.json());
 
 const roomManager = new RoomManager();
@@ -43,14 +46,12 @@ io.use((socket, next) => {
 
 registerSocketHandlers(io, roomManager);
 
+// ── REST API routes ──────────────────────────────────────────────────────────
+
 app.use('/api/admin', createAdminRouter(roomManager));
 
 app.get('/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    rooms: roomManager.getRoomList().length,
-    uptime: process.uptime(),
-  });
+  res.json({ status: 'ok', rooms: roomManager.getRoomList().length, uptime: process.uptime() });
 });
 
 app.get('/api/rooms', (_req, res) => {
@@ -59,8 +60,7 @@ app.get('/api/rooms', (_req, res) => {
 });
 
 app.get('/api/leaderboard', (_req, res) => {
-  const top5 = leaderboard.getTop(5);
-  res.json({ success: true, data: top5 });
+  res.json({ success: true, data: leaderboard.getTop(5) });
 });
 
 app.get('/api/leaderboard/top/:n', (req, res) => {
@@ -74,25 +74,41 @@ app.get('/api/leaderboard/player/:username', (req, res) => {
   res.json({ success: true, data: entry });
 });
 
-// Serve web app static files
+// ── Static file serving ──────────────────────────────────────────────────────
+
 const webDist = path.resolve(__dirname, '../../web/dist');
 const adminDist = path.resolve(__dirname, '../../admin/dist');
 
-app.use('/admin', express.static(adminDist));
-app.get('/admin/*', (_req, res) => {
+// ── ADMIN at /admin ───────────────────────────────────────────────────────────
+// CRITICAL ORDER: explicit SPA routes registered FIRST so Express processes them
+// before the static middleware can issue a 301 redirect for /admin (no trailing slash).
+
+// 1. SPA HTML for /admin (exact, no redirect)
+app.get('/admin', (_req, res) => {
   res.sendFile(path.join(adminDist, 'index.html'));
 });
+app.get('/admin/', (_req, res) => {
+  res.sendFile(path.join(adminDist, 'index.html'));
+});
+// 2. Deep SPA routes like /admin/dashboard, /admin/rooms/:id (no file extension)
+app.get(/^\/admin\/[^.]*$/, (_req, res) => {
+  res.sendFile(path.join(adminDist, 'index.html'));
+});
+// 3. Static assets (JS, CSS, etc. — have file extensions)
+app.use('/admin', express.static(adminDist, { index: false }));
 
-app.use(express.static(webDist));
+// ── WEB app ───────────────────────────────────────────────────────────────────
+app.use(express.static(webDist, { index: false }));
 app.get('*', (_req, res) => {
   res.sendFile(path.join(webDist, 'index.html'));
 });
 
+// ── Server start ──────────────────────────────────────────────────────────────
 httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`Snakesss server running on :${PORT}`);
-  console.log(`XAI integration: ${process.env['XAI_API_KEY'] ? 'enabled' : 'rule-based fallback'}`);
+  console.log(`Snakesss server :${PORT}`);
+  console.log(`  Web:   ${webDist}`);
+  console.log(`  Admin: ${adminDist}`);
+  console.log(`  XAI:   ${process.env['XAI_API_KEY'] ? 'enabled' : 'fallback'}`);
 });
 
-process.on('SIGTERM', () => {
-  httpServer.close(() => process.exit(0));
-});
+process.on('SIGTERM', () => { httpServer.close(() => process.exit(0)); });
