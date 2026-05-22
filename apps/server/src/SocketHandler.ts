@@ -6,6 +6,7 @@ import {
   CreateRoomPayload,
   GamePhase,
   AnswerIndex,
+  getOptimalRoleDistribution,
 } from '@snakesss/shared-types';
 import { RoomManager } from './RoomManager';
 import { verifyAdminToken } from './auth';
@@ -59,9 +60,8 @@ export function registerSocketHandlers(
     // ── Room: Join ──────────────────────────────────────────────────────────
     socket.on('room:join', (_payload: JoinRoomPayload, cb) => {
       const { roomId, username, avatar, asSpectator } = _payload;
-      const playerId = socket.id;
 
-      if (roomManager.isBanned(roomId, playerId)) {
+      if (roomManager.isBanned(roomId, socket.id)) {
         cb({ error: 'You are banned from this room' });
         return;
       }
@@ -69,19 +69,43 @@ export function registerSocketHandlers(
       const engine = roomManager.getEngine(roomId);
       if (!engine) { cb({ error: 'Room not found' }); return; }
 
-      const result = engine.addPlayer(playerId, username, avatar, asSpectator);
-      if (!result.success) { cb({ error: result.error ?? 'Failed to join' }); return; }
+      // ── Reconnect: try to restore a disconnected player by username ──────
+      // When a player refreshes (new socket ID), match them by username so they
+      // keep their role, manager status, and score.
+      const existingPlayer = engine.getState().players.find(
+        (p) => p.username.toLowerCase().trim() === username.toLowerCase().trim()
+          && !p.isSpectator
+          && !p.isConnected  // only restore disconnected slots
+      );
+
+      let effectivePlayerId = socket.id;
+
+      if (existingPlayer) {
+        // Restore the existing player slot with the new socket ID
+        effectivePlayerId = existingPlayer.id;
+        engine.reconnectPlayer(existingPlayer.id, socket.id);
+      } else {
+        const result = engine.addPlayer(socket.id, username, avatar, asSpectator);
+        if (!result.success) { cb({ error: result.error ?? 'Failed to join' }); return; }
+      }
 
       const meta = socketMeta.get(socket)!;
-      meta.playerId = playerId;
+      meta.playerId = effectivePlayerId;
       meta.roomId = roomId;
 
-      roomManager.registerSocket(roomId, playerId, socket.id);
+      roomManager.registerSocket(roomId, effectivePlayerId, socket.id);
       socket.join(`room:${roomId}`);
 
       const state = engine.getState();
       cb(state);
       io.to(`room:${roomId}`).emit('state:full', state);
+
+      // Re-send private role to the (re)joining player
+      const role = engine.getRole(effectivePlayerId);
+      if (role && state.phase !== 'lobby') {
+        socket.emit('player:role', role);
+      }
+
       broadcastAdminState(io, roomManager);
     });
 
@@ -108,8 +132,23 @@ export function registerSocketHandlers(
         return;
       }
 
+      // Auto-fix role distribution to be valid before starting
+      const currentState = engine.getState();
+      const activePlayers = currentState.players.filter((p) => !p.isSpectator && p.isConnected);
+      if (activePlayers.length >= 3) {
+        // Ensure role distribution is sane (won't exceed player count)
+        const optimal = getOptimalRoleDistribution(activePlayers.length);
+        engine.updateSettings({
+          roleDistribution: optimal,
+          advancedRoles: currentState.settings.advancedRoles,
+        });
+      }
+
       const result = engine.startGame();
-      if (!result.success) { socket.emit('error', result.error ?? 'Could not start game'); return; }
+      if (!result.success) {
+        socket.emit('error', result.error ?? 'Could not start game');
+        return;
+      }
 
       // Emit roles ONCE — only during game start
       emitPrivateRoles(meta.roomId, io, roomManager);

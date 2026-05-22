@@ -170,6 +170,24 @@ export class GameEngine {
     this.notifyStateChange();
   }
 
+  /**
+   * Restore a disconnected player with a new socket ID.
+   * Called when a player rejoins (page refresh) and is matched by username.
+   * The new socketId is the transport identifier but we keep the original player.id
+   * for role/score continuity. RoomManager updates the socket registry separately.
+   */
+  reconnectPlayer(existingPlayerId: string, _newSocketId: string): void {
+    this.state = {
+      ...this.state,
+      players: this.state.players.map((p) =>
+        p.id === existingPlayerId
+          ? { ...p, isConnected: true, lastSeenAt: Date.now() }
+          : p
+      ),
+    };
+    this.notifyStateChange();
+  }
+
   updateSettings(settings: Partial<RoomSettings>): void {
     this.state = { ...this.state, settings: { ...this.state.settings, ...settings } };
     this.notifyStateChange();

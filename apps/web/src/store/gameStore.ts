@@ -36,6 +36,9 @@ interface GameStore {
   quizRevealScores: RoundScore[];
   showQuizReveal: boolean;
 
+  // Socket error (auto-cleared)
+  lastSocketError: string | null;
+
   // UI overlays
   typingIndicators: TypingIndicator[];
   lastRoundResult: RoundVotes | null;
@@ -56,6 +59,7 @@ interface GameStore {
   setTyping: (t: TypingIndicator) => void;
   setRoundResult: (r: RoundVotes) => void;
   setWinner: (w: WinCondition) => void;
+  setLastSocketError: (msg: string | null) => void;
   setShowRoleReveal: (v: boolean) => void;
   setShowElimination: (v: boolean, player?: Player) => void;
   reset: () => void;
@@ -80,6 +84,7 @@ export const useGameStore = create<GameStore>()(
     typingIndicators: [],
     lastRoundResult: null,
     winner: null,
+    lastSocketError: null,
     showRoleReveal: false,
     showEliminationReveal: false,
     eliminatedPlayer: null,
@@ -141,6 +146,7 @@ export const useGameStore = create<GameStore>()(
 
     setWinner: (w) => set({ winner: w }),
 
+    setLastSocketError: (msg) => set({ lastSocketError: msg }),
     setShowRoleReveal: (v) => set({ showRoleReveal: v }),
 
     setShowElimination: (v, player) =>
@@ -161,7 +167,8 @@ export const useGameStore = create<GameStore>()(
         typingIndicators: [],
         lastRoundResult: null,
         winner: null,
-        showRoleReveal: false,
+        lastSocketError: null,
+      showRoleReveal: false,
         showEliminationReveal: false,
         eliminatedPlayer: null,
       }),

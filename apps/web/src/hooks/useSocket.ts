@@ -10,6 +10,7 @@ import type {
   Player,
 } from '@snakesss/shared-types';
 import { useGameStore } from '../store/gameStore';
+import { saveSession } from './useSession';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -51,6 +52,27 @@ export function useSocketListeners(): void {
 
     socket.on('state:full', (state) => {
       useGameStore.getState().setGameState(state);
+
+      // When rejoining mid-game (e.g. page refresh), reconstitute ephemeral
+      // UI state that is normally set by specific socket events:
+
+      // 1. answer_reveal: populate quiz reveal from game state directly
+      //    (quiz:reveal only fires live; after refresh only state:full arrives)
+      if (state.phase === 'answer_reveal' && state.currentQuestion && state.answersRevealed.length > 0) {
+        const roundScores = state.roundScores[state.round] ?? [];
+        useGameStore.getState().setQuizReveal(
+          state.answersRevealed,
+          state.currentQuestion.correctIndex,
+          roundScores
+        );
+      }
+
+      // 2. question phase: restore answer count so progress bar is correct
+      if (state.phase === 'question') {
+        const answered = Object.keys(state.answers).length;
+        const total = state.players.filter((p) => p.isAlive && !p.isSpectator).length;
+        useGameStore.setState({ answerCount: answered, answerTotal: total });
+      }
     });
 
     socket.on('state:patch', (patch) => {
@@ -125,6 +147,10 @@ export function useSocketListeners(): void {
 
     socket.on('error', (msg) => {
       console.error('[Socket]', msg);
+      // Store last socket error so UI can display it
+      useGameStore.setState({ lastSocketError: msg });
+      // Auto-clear after 4 seconds
+      setTimeout(() => useGameStore.setState({ lastSocketError: null }), 4000);
     });
 
     // No cleanup — socket lives for the app lifetime

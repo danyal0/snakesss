@@ -23,6 +23,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
   const navigate = useNavigate();
   const { startGame, updateSettings, addBot, kickPlayerFromRoom } = useSocket();
   const playerId = useGameStore((s) => s.playerId);
+  const lastSocketError = useGameStore((s) => s.lastSocketError);
 
   const me = gameState.players.find((p) => p.id === playerId);
   const isManager = me?.isRoomManager ?? false;
@@ -73,16 +74,16 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
     updateSettings(settings);
   };
 
-  const handleStart = async () => {
+  const handleStart = () => {
+    if (startLoading) return;
     setStartLoading(true);
     setStartError('');
-    try {
-      startGame();
-    } catch (e) {
-      setStartError((e as Error).message);
-    } finally {
+    startGame();
+    // Reset loading if game doesn't start within 3s (server rejection / silent error)
+    const timer = setTimeout(() => {
       setStartLoading(false);
-    }
+    }, 3000);
+    return () => clearTimeout(timer);
   };
 
   return (
@@ -484,8 +485,10 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
 
       {/* Bottom CTA */}
       <div className="flex-shrink-0 px-4 pb-6 pt-3 space-y-2">
-        {startError && (
-          <p className="text-sm text-red-400 text-center">{startError}</p>
+        {(startError || lastSocketError) && (
+          <p className="text-sm text-red-400 text-center">
+            {startError || lastSocketError}
+          </p>
         )}
 
         {isManager ? (
