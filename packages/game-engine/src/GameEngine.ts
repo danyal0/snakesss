@@ -10,22 +10,31 @@ import {
   DEFAULT_ROOM_SETTINGS,
   WinCondition,
   AvatarEmoji,
+  QuizQuestion,
+  AnswerIndex,
+  PlayerAnswer,
+  RoundScore,
 } from '@snakesss/shared-types';
-import { assignRoles, checkWinCondition, revealRole } from './roles';
+import { assignRoles, checkWinCondition, revealRole, calculateRoundScores } from './roles';
 import { buildRoundVotes } from './voting';
 import { generateId, generateRoomCode } from './utils';
+import { getRandomQuestion, generateAIQuestion } from './questions';
 
 export interface CreateRoomOptions {
   managerId: string;
   managerName: string;
   managerAvatar: AvatarEmoji;
   settings?: Partial<RoomSettings>;
+  xaiApiKey?: string;
 }
 
 export class GameEngine {
   private state: GameState;
   private roleMap: Map<string, Role> = new Map();
+  private answerMap: Map<string, AnswerIndex> = new Map(); // hidden until reveal
+  private usedQuestionTopics: string[] = [];
   private phaseTimer: ReturnType<typeof setTimeout> | null = null;
+  private xaiApiKey?: string;
   private onStateChange?: (state: GameState) => void;
   private onEvent?: (event: GameEvent) => void;
   private onPhaseEnd?: (phase: GamePhase) => void;
@@ -35,6 +44,7 @@ export class GameEngine {
       ...DEFAULT_ROOM_SETTINGS,
       ...options.settings,
     };
+    this.xaiApiKey = options.xaiApiKey;
 
     const manager: Player = {
       id: options.managerId,
@@ -45,6 +55,7 @@ export class GameEngine {
       isRoomManager: true,
       isConnected: true,
       isAlive: true,
+      score: 0,
       joinedAt: Date.now(),
       lastSeenAt: Date.now(),
     };
@@ -53,7 +64,12 @@ export class GameEngine {
       roomId: generateRoomCode(),
       phase: 'lobby',
       round: 0,
+      totalRounds: settings.totalRounds,
       players: [manager],
+      currentQuestion: null,
+      answers: {},
+      answersRevealed: [],
+      roundScores: {},
       votes: {},
       roundHistory: [],
       chat: [],
@@ -71,37 +87,19 @@ export class GameEngine {
     this.emit('player_joined', { player: manager });
   }
 
-  // ─── Setters ──────────────────────────────────────────────────────────────
+  // ─── Callbacks ────────────────────────────────────────────────────────────
 
-  onStateChanged(cb: (state: GameState) => void): void {
-    this.onStateChange = cb;
-  }
-
-  onEventEmitted(cb: (event: GameEvent) => void): void {
-    this.onEvent = cb;
-  }
-
-  onPhaseEnded(cb: (phase: GamePhase) => void): void {
-    this.onPhaseEnd = cb;
-  }
+  onStateChanged(cb: (state: GameState) => void): void { this.onStateChange = cb; }
+  onEventEmitted(cb: (event: GameEvent) => void): void { this.onEvent = cb; }
+  onPhaseEnded(cb: (phase: GamePhase) => void): void { this.onPhaseEnd = cb; }
 
   // ─── State Access ─────────────────────────────────────────────────────────
 
-  getState(): GameState {
-    return { ...this.state };
-  }
-
-  getRole(playerId: string): Role | undefined {
-    return this.roleMap.get(playerId);
-  }
-
-  getAllRoles(): Map<string, Role> {
-    return new Map(this.roleMap);
-  }
-
-  getRoomId(): string {
-    return this.state.roomId;
-  }
+  getState(): GameState { return { ...this.state }; }
+  getRole(playerId: string): Role | undefined { return this.roleMap.get(playerId); }
+  getAllRoles(): Map<string, Role> { return new Map(this.roleMap); }
+  getRoomId(): string { return this.state.roomId; }
+  getAnswerMap(): Map<string, AnswerIndex> { return new Map(this.answerMap); }
 
   // ─── Player Management ────────────────────────────────────────────────────
 
@@ -144,6 +142,7 @@ export class GameEngine {
       isRoomManager: false,
       isConnected: true,
       isAlive: true,
+      score: 0,
       joinedAt: Date.now(),
       lastSeenAt: Date.now(),
     };
@@ -151,9 +150,7 @@ export class GameEngine {
     this.state = {
       ...this.state,
       players: [...players, player],
-      spectators: asSpectator
-        ? [...this.state.spectators, id]
-        : this.state.spectators,
+      spectators: asSpectator ? [...this.state.spectators, id] : this.state.spectators,
     };
 
     this.emit('player_joined', { player });
@@ -168,27 +165,20 @@ export class GameEngine {
   }
 
   kickPlayer(id: string): void {
-    this.state = {
-      ...this.state,
-      players: this.state.players.filter((p) => p.id !== id),
-    };
+    this.state = { ...this.state, players: this.state.players.filter((p) => p.id !== id) };
     this.emit('player_left', { playerId: id });
     this.notifyStateChange();
   }
 
   updateSettings(settings: Partial<RoomSettings>): void {
-    this.state = {
-      ...this.state,
-      settings: { ...this.state.settings, ...settings },
-    };
+    this.state = { ...this.state, settings: { ...this.state.settings, ...settings } };
     this.notifyStateChange();
   }
 
-  // ─── Game Lifecycle ───────────────────────────────────────────────────────
+  // ─── Game Start ───────────────────────────────────────────────────────────
 
   startGame(): { success: boolean; error?: string } {
     const activePlayers = this.state.players.filter((p) => !p.isSpectator && p.isConnected);
-
     if (activePlayers.length < 3) {
       return { success: false, error: 'Need at least 3 players to start' };
     }
@@ -201,16 +191,121 @@ export class GameEngine {
       phase: 'dealing',
       round: 1,
       startedAt: Date.now(),
-      players: this.state.players.map((p) => ({ ...p, isAlive: !p.isSpectator })),
+      players: this.state.players.map((p) => ({ ...p, isAlive: !p.isSpectator, score: 0 })),
     };
 
     this.emit('game_started', { playerCount: activePlayers.length });
     this.notifyStateChange();
-
-    // Auto-advance from dealing to discussion after animation
     this.schedulePhaseEnd('dealing', 4000);
     return { success: true };
   }
+
+  // ─── Question Phase ───────────────────────────────────────────────────────
+
+  async transitionToQuestion(): Promise<void> {
+    const question = this.xaiApiKey
+      ? await generateAIQuestion(this.xaiApiKey, this.usedQuestionTopics)
+      : getRandomQuestion();
+
+    this.usedQuestionTopics.push(question.text.split(' ').slice(0, 3).join(' '));
+    this.answerMap.clear();
+
+    const endsAt = Date.now() + this.state.settings.questionTimer * 1000;
+    this.state = {
+      ...this.state,
+      phase: 'question',
+      currentQuestion: question,
+      answers: {},
+      answersRevealed: [],
+      phaseEndsAt: endsAt,
+    };
+
+    this.emit('question_shown', { questionId: question.id });
+    this.notifyStateChange();
+    this.schedulePhaseEnd('question', this.state.settings.questionTimer * 1000);
+  }
+
+  submitAnswer(playerId: string, answerIndex: AnswerIndex): { success: boolean; allAnswered?: boolean } {
+    if (this.state.phase !== 'question') return { success: false };
+    const player = this.state.players.find((p) => p.id === playerId);
+    if (!player?.isAlive || player.isSpectator) return { success: false };
+    if (this.answerMap.has(playerId)) return { success: false }; // already answered
+
+    this.answerMap.set(playerId, answerIndex);
+    this.state = {
+      ...this.state,
+      answers: { ...this.state.answers, [playerId]: answerIndex },
+    };
+    this.emit('answer_submitted', { playerId });
+    this.notifyStateChange();
+
+    const alivePlayers = this.state.players.filter((p) => p.isAlive && !p.isSpectator);
+    const allAnswered = this.answerMap.size >= alivePlayers.length;
+    if (allAnswered) {
+      this.clearPhaseTimer();
+      this.transitionToAnswerReveal();
+    }
+
+    return { success: true, allAnswered };
+  }
+
+  transitionToAnswerReveal(): void {
+    const question = this.state.currentQuestion;
+    if (!question) return;
+
+    const alivePlayers = this.state.players.filter((p) => p.isAlive && !p.isSpectator);
+
+    // Build revealed answers
+    const answersRevealed: PlayerAnswer[] = alivePlayers.map((player) => {
+      const answerIndex = this.answerMap.get(player.id) ?? 0;
+      const role = this.roleMap.get(player.id);
+      return {
+        playerId: player.id,
+        playerName: player.username,
+        playerAvatar: player.avatar,
+        answerIndex,
+        isCorrect: answerIndex === question.correctIndex,
+        role: role?.type ?? 'human',
+      };
+    });
+
+    // Calculate scores
+    const scoreDeltas = calculateRoundScores(
+      this.answerMap,
+      question.correctIndex,
+      this.roleMap,
+      this.state.players
+    );
+
+    const updatedPlayers = this.state.players.map((p) => ({
+      ...p,
+      score: p.score + (scoreDeltas.get(p.id) ?? 0),
+    }));
+
+    const roundScoreList: RoundScore[] = Array.from(scoreDeltas.entries()).map(([playerId, pts]) => ({
+      playerId,
+      pointsEarned: pts,
+      totalScore: updatedPlayers.find((p) => p.id === playerId)?.score ?? 0,
+    }));
+
+    this.state = {
+      ...this.state,
+      phase: 'answer_reveal',
+      answersRevealed,
+      players: updatedPlayers,
+      roundScores: {
+        ...this.state.roundScores,
+        [this.state.round]: roundScoreList,
+      },
+      phaseEndsAt: null,
+    };
+
+    this.emit('round_scored', { round: this.state.round, scores: roundScoreList });
+    this.notifyStateChange();
+    this.schedulePhaseEnd('answer_reveal', 5000);
+  }
+
+  // ─── Discussion Phase ─────────────────────────────────────────────────────
 
   transitionToDiscussion(): void {
     const endsAt = Date.now() + this.state.settings.discussionTimer * 1000;
@@ -219,6 +314,8 @@ export class GameEngine {
     this.notifyStateChange();
     this.schedulePhaseEnd('discussion', this.state.settings.discussionTimer * 1000);
   }
+
+  // ─── Voting Phase ─────────────────────────────────────────────────────────
 
   transitionToVoting(): void {
     const endsAt = Date.now() + this.state.settings.voteTimer * 1000;
@@ -231,7 +328,6 @@ export class GameEngine {
   transitionToVoteReveal(): void {
     this.state = { ...this.state, phase: 'vote_reveal', phaseEndsAt: null };
     this.clearPhaseTimer();
-    this.emit('phase_changed', { phase: 'vote_reveal', endsAt: null });
     this.notifyStateChange();
     this.schedulePhaseEnd('vote_reveal', 3000);
   }
@@ -239,23 +335,16 @@ export class GameEngine {
   resolveVotes(): void {
     const alivePlayers = this.state.players.filter((p) => p.isAlive && !p.isSpectator);
     const roundVotes = buildRoundVotes(this.state.round, this.state.votes, alivePlayers);
+    this.state = { ...this.state, roundHistory: [...this.state.roundHistory, roundVotes] };
 
-    this.state = {
-      ...this.state,
-      roundHistory: [...this.state.roundHistory, roundVotes],
-    };
-
-    const eliminatedId = roundVotes.eliminatedId;
-    if (eliminatedId) {
-      this.eliminatePlayer(eliminatedId);
+    if (roundVotes.eliminatedId) {
+      this.eliminatePlayer(roundVotes.eliminatedId);
     }
   }
 
   eliminatePlayer(playerId: string): void {
     const role = this.roleMap.get(playerId);
-    if (role) {
-      this.roleMap.set(playerId, revealRole(role));
-    }
+    if (role) this.roleMap.set(playerId, revealRole(role));
 
     this.state = {
       ...this.state,
@@ -267,21 +356,32 @@ export class GameEngine {
 
     this.emit('player_eliminated', { playerId, role: role ? revealRole(role) : null });
     this.notifyStateChange();
-
-    // Check win after elimination
-    const winner = this.evaluateWin();
-    if (winner) {
-      this.schedulePhaseEnd('elimination', 3000);
-      return;
-    }
-
-    this.schedulePhaseEnd('elimination', 3000);
+    this.schedulePhaseEnd('elimination', 3500);
   }
+
+  // ─── Scores Phase ─────────────────────────────────────────────────────────
+
+  transitionToScores(): void {
+    this.state = { ...this.state, phase: 'scores', phaseEndsAt: null };
+    this.notifyStateChange();
+    this.schedulePhaseEnd('scores', 4000);
+  }
+
+  nextRound(): void {
+    this.state = { ...this.state, round: this.state.round + 1 };
+    this.notifyStateChange();
+  }
+
+  // ─── Win Condition ────────────────────────────────────────────────────────
 
   evaluateWin(): WinCondition {
     const alivePlayers = this.state.players.filter((p) => p.isAlive && !p.isSpectator);
-    const winner = checkWinCondition(alivePlayers, this.roleMap);
-    return winner;
+    return checkWinCondition(
+      alivePlayers,
+      this.roleMap,
+      this.state.totalRounds,
+      this.state.round
+    );
   }
 
   endGame(winner: WinCondition): void {
@@ -329,11 +429,7 @@ export class GameEngine {
       round: this.state.round,
     };
 
-    this.state = {
-      ...this.state,
-      chat: [...this.state.chat, message],
-    };
-
+    this.state = { ...this.state, chat: [...this.state.chat, message] };
     this.emit('message_sent', { message });
     this.notifyStateChange();
     return message;
@@ -342,35 +438,21 @@ export class GameEngine {
   // ─── Voting ───────────────────────────────────────────────────────────────
 
   castVote(voterId: string, targetId: string): { success: boolean; error?: string } {
-    if (this.state.phase !== 'voting') {
-      return { success: false, error: 'Not in voting phase' };
-    }
+    if (this.state.phase !== 'voting') return { success: false, error: 'Not in voting phase' };
 
     const voter = this.state.players.find((p) => p.id === voterId);
     const target = this.state.players.find((p) => p.id === targetId);
 
-    if (!voter?.isAlive || voter.isSpectator) {
-      return { success: false, error: 'Cannot vote' };
-    }
-    if (!target?.isAlive || target.isSpectator) {
-      return { success: false, error: 'Invalid target' };
-    }
-    if (voterId === targetId) {
-      return { success: false, error: 'Cannot vote for yourself' };
-    }
+    if (!voter?.isAlive || voter.isSpectator) return { success: false, error: 'Cannot vote' };
+    if (!target?.isAlive || target.isSpectator) return { success: false, error: 'Invalid target' };
+    if (voterId === targetId) return { success: false, error: 'Cannot vote for yourself' };
 
-    this.state = {
-      ...this.state,
-      votes: { ...this.state.votes, [voterId]: targetId },
-    };
-
+    this.state = { ...this.state, votes: { ...this.state.votes, [voterId]: targetId } };
     this.emit('vote_cast', { voterId, targetId });
     this.notifyStateChange();
 
-    // Auto-advance if everyone voted
     const alivePlayers = this.state.players.filter((p) => p.isAlive && !p.isSpectator);
-    const votedCount = Object.keys(this.state.votes).length;
-    if (votedCount >= alivePlayers.length) {
+    if (Object.keys(this.state.votes).length >= alivePlayers.length) {
       this.clearPhaseTimer();
       this.transitionToVoteReveal();
     }
@@ -380,56 +462,32 @@ export class GameEngine {
 
   // ─── Admin Controls ───────────────────────────────────────────────────────
 
-  pause(): void {
-    this.state = { ...this.state, isPaused: true };
-    this.clearPhaseTimer();
-    this.notifyStateChange();
-  }
-
-  resume(): void {
-    this.state = { ...this.state, isPaused: false };
-    this.notifyStateChange();
-  }
-
-  nextRound(): void {
-    this.state = { ...this.state, round: this.state.round + 1 };
-    this.notifyStateChange();
-  }
-
+  pause(): void { this.state = { ...this.state, isPaused: true }; this.clearPhaseTimer(); this.notifyStateChange(); }
+  resume(): void { this.state = { ...this.state, isPaused: false }; this.notifyStateChange(); }
   forcePhase(phase: GamePhase): void {
-    switch (phase) {
-      case 'discussion': this.transitionToDiscussion(); break;
-      case 'voting': this.transitionToVoting(); break;
-      case 'vote_reveal': this.transitionToVoteReveal(); break;
-      default: break;
-    }
+    if (phase === 'discussion') this.transitionToDiscussion();
+    else if (phase === 'voting') this.transitionToVoting();
+    else if (phase === 'vote_reveal') this.transitionToVoteReveal();
   }
 
-  // ─── Internal Helpers ─────────────────────────────────────────────────────
+  // ─── Internals ────────────────────────────────────────────────────────────
 
   private updatePlayer(id: string, updates: Partial<Player>): void {
     this.state = {
       ...this.state,
-      players: this.state.players.map((p) =>
-        p.id === id ? { ...p, ...updates } : p
-      ),
+      players: this.state.players.map((p) => (p.id === id ? { ...p, ...updates } : p)),
     };
   }
 
   private schedulePhaseEnd(phase: GamePhase, delayMs: number): void {
     this.clearPhaseTimer();
     this.phaseTimer = setTimeout(() => {
-      if (!this.state.isPaused) {
-        this.onPhaseEnd?.(phase);
-      }
+      if (!this.state.isPaused) this.onPhaseEnd?.(phase);
     }, delayMs);
   }
 
   private clearPhaseTimer(): void {
-    if (this.phaseTimer) {
-      clearTimeout(this.phaseTimer);
-      this.phaseTimer = null;
-    }
+    if (this.phaseTimer) { clearTimeout(this.phaseTimer); this.phaseTimer = null; }
   }
 
   private emit(type: GameEventType, payload: Record<string, unknown>): void {
@@ -440,10 +498,7 @@ export class GameEngine {
       timestamp: Date.now(),
       round: this.state.round,
     };
-    this.state = {
-      ...this.state,
-      timeline: [...this.state.timeline, event],
-    };
+    this.state = { ...this.state, timeline: [...this.state.timeline, event] };
     this.onEvent?.(event);
   }
 
@@ -451,7 +506,5 @@ export class GameEngine {
     this.onStateChange?.({ ...this.state });
   }
 
-  destroy(): void {
-    this.clearPhaseTimer();
-  }
+  destroy(): void { this.clearPhaseTimer(); }
 }

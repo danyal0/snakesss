@@ -73,12 +73,12 @@ export function EliminationReveal({ player, show }: EliminationRevealProps) {
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <span className="text-4xl">{isSnake ? '🐍' : role?.type === 'seer' ? '🔮' : '👤'}</span>
+                  <span className="text-4xl">{isSnake ? '🐍' : role?.type === 'mongoose' ? '🔮' : '👤'}</span>
                   <div className="text-left">
                     <p className="text-xs text-white/50 uppercase tracking-wider">Role Revealed</p>
                     <p className={clsx(
                       'text-2xl font-bold',
-                      isSnake ? 'text-red-400' : role?.type === 'seer' ? 'text-blue-400' : 'text-green-400'
+                      isSnake ? 'text-red-400' : role?.type === 'mongoose' ? 'text-blue-400' : 'text-green-400'
                     )}>
                       {role?.type.charAt(0).toUpperCase()}{role?.type.slice(1)}
                     </p>

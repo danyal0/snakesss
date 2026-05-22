@@ -25,7 +25,7 @@ interface RoomEntry {
 
 interface CompletedGame {
   roomId: string;
-  winner: 'villagers' | 'snakes' | null;
+  winner: 'humans' | 'snakes' | null;
   durationMs: number;
   hadBots: boolean;
   startedAt: number;
@@ -148,7 +148,7 @@ export class RoomManager {
       if (state.startedAt) {
         this.completedGames.push({
           roomId,
-          winner: state.winner,
+          winner: state.winner as 'humans' | 'snakes' | null,
           durationMs: (state.endedAt ?? Date.now()) - state.startedAt,
           hadBots: state.players.some((p) => p.isBot),
           startedAt: state.startedAt,
@@ -182,7 +182,7 @@ export class RoomManager {
       0
     );
 
-    const villagerWins = this.completedGames.filter((g) => g.winner === 'villagers').length;
+    const humanWins = this.completedGames.filter((g) => g.winner === 'humans').length;
     const snakeWins = this.completedGames.filter((g) => g.winner === 'snakes').length;
     const avgDuration = total > 0
       ? this.completedGames.reduce((sum, g) => sum + g.durationMs, 0) / total
@@ -196,7 +196,7 @@ export class RoomManager {
       activeGames: active,
       totalPlayers,
       avgGameDurationMs: avgDuration,
-      villagerWins,
+      humanWins,
       snakeWins,
       aiVsHumanWinRate: {
         ai: botGames.length,

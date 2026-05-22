@@ -1,17 +1,43 @@
 // ─── Role Types ──────────────────────────────────────────────────────────────
 
-export type RoleType = 'snake' | 'villager' | 'seer';
+export type RoleType = 'snake' | 'human' | 'mongoose';
 
 export interface Role {
   type: RoleType;
   revealed: boolean;
-  eliminatedAt?: number; // round number
+  eliminatedAt?: number;
 }
 
 export interface RoleDistribution {
   snakes: number;
-  villagers: number;
-  seers: number;
+  humans: number;
+  mongooses: number; // 0 or 1
+}
+
+// ─── Quiz Types ───────────────────────────────────────────────────────────────
+
+export interface QuizQuestion {
+  id: string;
+  text: string;
+  options: [string, string, string];
+  correctIndex: 0 | 1 | 2;
+}
+
+export type AnswerIndex = 0 | 1 | 2;
+
+export interface PlayerAnswer {
+  playerId: string;
+  playerName: string;
+  playerAvatar: AvatarEmoji;
+  answerIndex: AnswerIndex;
+  isCorrect: boolean;
+  role: RoleType;
+}
+
+export interface RoundScore {
+  playerId: string;
+  pointsEarned: number;
+  totalScore: number;
 }
 
 // ─── Player Types ─────────────────────────────────────────────────────────────
@@ -31,6 +57,7 @@ export interface Player {
   isConnected: boolean;
   isAlive: boolean;
   role?: Role;
+  score: number;
   joinedAt: number;
   lastSeenAt: number;
 }
@@ -43,7 +70,7 @@ export interface BotMemory {
   accusationsReceived: Array<{ from: string; round: number }>;
   accusationsMade: Array<{ against: string; round: number }>;
   votesFor: Array<{ target: string; round: number }>;
-  perceivedThreat: Record<string, number>; // playerId -> threat level 0-1
+  perceivedThreat: Record<string, number>;
   chatHistory: string[];
 }
 
@@ -52,13 +79,16 @@ export interface BotMemory {
 export type GamePhase =
   | 'lobby'
   | 'dealing'
+  | 'question'        // NEW: question shown, players pick A/B/C
+  | 'answer_reveal'   // NEW: all answers shown publicly
   | 'discussion'
   | 'voting'
   | 'vote_reveal'
   | 'elimination'
+  | 'scores'          // NEW: round scores shown
   | 'ended';
 
-export type WinCondition = 'villagers' | 'snakes' | null;
+export type WinCondition = 'humans' | 'snakes' | null;
 
 // ─── Chat Types ───────────────────────────────────────────────────────────────
 
@@ -71,7 +101,6 @@ export interface ChatMessage {
   playerAvatar: AvatarEmoji;
   content: string;
   type: MessageType;
-  reaction?: string;
   timestamp: number;
   round: number;
 }
@@ -112,12 +141,14 @@ export interface RoomSettings {
   maxPlayers: number;
   botsEnabled: boolean;
   botCount: number;
-  discussionTimer: number;   // seconds
-  voteTimer: number;         // seconds
+  discussionTimer: number;
+  voteTimer: number;
+  questionTimer: number;  // seconds for answer phase
+  totalRounds: number;    // default 6
   roleDistribution: RoleDistribution;
   isPrivate: boolean;
   allowSpectators: boolean;
-  advancedRoles: boolean;    // enables Seer role
+  advancedRoles: boolean; // enables Mongoose role
 }
 
 export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
@@ -126,21 +157,26 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   botCount: 0,
   discussionTimer: 120,
   voteTimer: 30,
-  roleDistribution: { snakes: 2, villagers: 5, seers: 0 },
+  questionTimer: 30,
+  totalRounds: 6,
+  roleDistribution: { snakes: 2, humans: 5, mongooses: 0 },
   isPrivate: false,
   allowSpectators: true,
   advancedRoles: false,
 };
 
-// ─── Game Event (Timeline) ────────────────────────────────────────────────────
+// ─── Game Event ───────────────────────────────────────────────────────────────
 
 export type GameEventType =
   | 'game_started'
   | 'role_assigned'
+  | 'question_shown'
+  | 'answer_submitted'
   | 'phase_changed'
   | 'message_sent'
   | 'vote_cast'
   | 'player_eliminated'
+  | 'round_scored'
   | 'game_ended'
   | 'player_joined'
   | 'player_left'
@@ -162,22 +198,31 @@ export interface GameState {
   roomId: string;
   phase: GamePhase;
   round: number;
+  totalRounds: number;
   players: Player[];
-  votes: Record<string, string>;           // voterId -> targetId (current round)
+  // Quiz
+  currentQuestion: QuizQuestion | null;
+  answers: Record<string, AnswerIndex>;          // playerId → answerIndex (hidden during question)
+  answersRevealed: PlayerAnswer[];               // shown after reveal
+  roundScores: Record<number, RoundScore[]>;     // round → scores
+  // Elimination
+  votes: Record<string, string>;
   roundHistory: RoundVotes[];
+  // Chat
   chat: ChatMessage[];
+  // End
   winner: WinCondition;
   settings: RoomSettings;
   timeline: GameEvent[];
-  phaseEndsAt: number | null;              // UTC ms timestamp
-  spectators: string[];                    // player IDs
+  phaseEndsAt: number | null;
+  spectators: string[];
   isPaused: boolean;
   createdAt: number;
   startedAt: number | null;
   endedAt: number | null;
 }
 
-// ─── Socket Event Payloads ────────────────────────────────────────────────────
+// ─── Socket Payloads ──────────────────────────────────────────────────────────
 
 export interface JoinRoomPayload {
   roomId: string;
@@ -201,6 +246,10 @@ export interface CastVotePayload {
   targetId: string;
 }
 
+export interface SubmitAnswerPayload {
+  answerIndex: AnswerIndex;
+}
+
 export interface UpdateSettingsPayload {
   settings: Partial<RoomSettings>;
 }
@@ -211,7 +260,7 @@ export interface AdminActionPayload {
   data?: Record<string, unknown>;
 }
 
-// ─── Socket Events (Client → Server) ─────────────────────────────────────────
+// ─── Socket Events ────────────────────────────────────────────────────────────
 
 export interface ClientToServerEvents {
   'room:create': (payload: CreateRoomPayload, cb: (roomId: string) => void) => void;
@@ -221,6 +270,7 @@ export interface ClientToServerEvents {
   'room:settings:update': (payload: UpdateSettingsPayload) => void;
   'room:add_bot': (persona: BotPersona, cb: (result: { botId: string } | { error: string }) => void) => void;
   'room:kick': (targetId: string) => void;
+  'quiz:submit_answer': (payload: SubmitAnswerPayload) => void;
   'chat:send': (payload: SendMessagePayload) => void;
   'chat:typing': (isTyping: boolean) => void;
   'vote:cast': (payload: CastVotePayload) => void;
@@ -228,20 +278,21 @@ export interface ClientToServerEvents {
   'spectate:room': (roomId: string) => void;
 }
 
-// ─── Socket Events (Server → Client) ─────────────────────────────────────────
-
 export interface ServerToClientEvents {
   'state:full': (state: GameState) => void;
   'state:patch': (patch: Partial<GameState>) => void;
   'player:joined': (player: Player) => void;
   'player:left': (playerId: string) => void;
-  'player:role': (role: Role) => void;
+  'player:role': (role: Role, correctAnswer?: AnswerIndex) => void; // snakes get correctAnswer
   'phase:changed': (phase: GamePhase, endsAt: number | null) => void;
+  'quiz:question': (question: Omit<QuizQuestion, 'correctIndex'>, snakeAnswer?: AnswerIndex) => void;
+  'quiz:answer_update': (count: number, total: number) => void;
+  'quiz:reveal': (answers: PlayerAnswer[], correctIndex: AnswerIndex, scores: RoundScore[]) => void;
   'chat:message': (message: ChatMessage) => void;
   'chat:typing': (indicator: TypingIndicator) => void;
   'vote:update': (votes: Record<string, string>) => void;
   'round:result': (result: RoundVotes) => void;
-  'game:ended': (winner: WinCondition, timeline: GameEvent[]) => void;
+  'game:ended': (winner: WinCondition, scores: Player[]) => void;
   'error': (message: string) => void;
   'room:list': (rooms: RoomSummary[]) => void;
   'admin:state': (state: AdminState) => void;
@@ -269,13 +320,11 @@ export interface Analytics {
   activeGames: number;
   totalPlayers: number;
   avgGameDurationMs: number;
-  villagerWins: number;
+  humanWins: number;
   snakeWins: number;
   aiVsHumanWinRate: { ai: number; human: number };
   votePatternsPerRound: number[];
 }
-
-// ─── API Response Types ───────────────────────────────────────────────────────
 
 export interface ApiResponse<T> {
   success: boolean;

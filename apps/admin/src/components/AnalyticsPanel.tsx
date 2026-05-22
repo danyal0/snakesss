@@ -30,7 +30,7 @@ export function AnalyticsPanel({ analytics }: AnalyticsPanelProps) {
   }
 
   const winData = [
-    { name: 'Villager Wins', value: analytics.villagerWins },
+    { name: 'Human Wins', value: analytics.humanWins },
     { name: 'Snake Wins', value: analytics.snakeWins },
   ];
 
@@ -77,7 +77,7 @@ export function AnalyticsPanel({ analytics }: AnalyticsPanelProps) {
         <MetricCard
           label="Villager Win Rate"
           value={analytics.totalGames > 0
-            ? `${Math.round((analytics.villagerWins / analytics.totalGames) * 100)}%`
+            ? `${Math.round((analytics.humanWins / analytics.totalGames) * 100)}%`
             : '—'
           }
           icon="🏆"

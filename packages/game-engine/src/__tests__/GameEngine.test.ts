@@ -8,7 +8,7 @@ function createEngine() {
     managerName: 'Alice',
     managerAvatar: '🦊' as AvatarEmoji,
     settings: {
-      roleDistribution: { snakes: 1, villagers: 2, seers: 0 },
+      roleDistribution: { snakes: 1, humans: 2, mongooses: 0 },
       maxPlayers: 8,
       botsEnabled: false,
       botCount: 0,
@@ -70,7 +70,7 @@ describe('GameEngine', () => {
     expect(roles.size).toBe(3);
     const types = Array.from(roles.values()).map((r) => r.type);
     expect(types).toContain('snake');
-    expect(types.filter((t) => t === 'villager').length).toBe(2);
+    expect(types.filter((t) => t === 'human').length).toBe(2);
   });
 
   it('allows chat during discussion only', () => {

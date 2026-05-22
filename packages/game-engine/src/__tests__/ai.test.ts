@@ -15,6 +15,7 @@ function makeBot(id: string, persona: 'aggressive' | 'silent_strategist' | 'chao
     isRoomManager: false,
     isConnected: true,
     isAlive: true,
+    score: 0,
     joinedAt: Date.now(),
     lastSeenAt: Date.now(),
   };
@@ -30,6 +31,7 @@ function makePlayer(id: string): Player {
     isRoomManager: false,
     isConnected: true,
     isAlive: true,
+    score: 0,
     joinedAt: Date.now(),
     lastSeenAt: Date.now(),
   };
@@ -40,7 +42,12 @@ function makeGameState(players: Player[]): GameState {
     roomId: 'TEST01',
     phase: 'discussion',
     round: 1,
+    totalRounds: 6,
     players,
+    currentQuestion: null,
+    answers: {},
+    answersRevealed: [],
+    roundScores: {},
     votes: {},
     roundHistory: [],
     chat: [],
@@ -81,7 +88,7 @@ describe('RuleBasedProvider', () => {
 
     const msg = await provider.generateMessage({
       botPlayer: bot,
-      role: 'villager',
+      role: 'human',
       persona: 'aggressive',
       memory: {
         accusationsReceived: [],
@@ -150,7 +157,7 @@ describe('BotDecisionEngine', () => {
     const state = makeGameState(players);
     state.phase = 'voting';
 
-    const targetId = await engine.decideVote(bot, 'villager', state, []);
+    const targetId = await engine.decideVote(bot, 'human', state, []);
     expect(typeof targetId).toBe('string');
     expect(['p1', 'p2']).toContain(targetId);
   });

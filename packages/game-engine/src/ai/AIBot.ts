@@ -92,7 +92,7 @@ export class RuleBasedProvider implements AIProvider {
       });
     }
 
-    return fillTemplate(pickRandom(VILLAGER_ASSURANCE_PHRASES), {
+    return fillTemplate(pickRandom(VILLAGER_ASSURANCE_PHRASES as string[]), {
       player: randomTarget.username,
       target: randomTarget.username,
     });
@@ -263,8 +263,8 @@ export class BotDecisionEngine {
       return alivePlayers[Math.floor(Math.random() * alivePlayers.length)].id;
     }
 
-    // Snakes vote strategically against threatening villagers
-    if (role === 'snake' && knownSnakes.length > 0) {
+    // Snakes vote strategically against threatening humans
+    if ((role === 'snake') && knownSnakes.length > 0) {
       const nonSnakes = alivePlayers.filter((p) => !knownSnakes.includes(p.id));
       if (nonSnakes.length > 0) {
         const threateningSorted = nonSnakes.sort(
@@ -308,10 +308,10 @@ function fillTemplate(template: string, vars: Record<string, string>): string {
 
 function buildSystemPrompt(ctx: AIContext): string {
   const roleDesc = ctx.role === 'snake'
-    ? 'You are secretly a SNAKE. Your goal is to avoid being caught while manipulating others into eliminating Villagers.'
-    : ctx.role === 'seer'
-    ? 'You are the SEER. You can sense whether someone is a Snake, but you must be careful about revealing this.'
-    : 'You are a VILLAGER. Your goal is to identify and eliminate all Snakes.';
+    ? 'You are secretly a SNAKE. Your goal is to avoid being caught. Mislead humans into wrong trivia answers and survive the vote.'
+    : ctx.role === 'mongoose'
+    ? 'You are the MONGOOSE. Everyone knows you are not a Snake, but you still do not know the correct answer.'
+    : 'You are a HUMAN. Your goal is to find the correct trivia answer and identify Snakes.';
 
   const personaDesc: Record<BotPersona, string> = {
     aggressive: 'You are loud, accusatory, and confrontational. You call people out directly.',

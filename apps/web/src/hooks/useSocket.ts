@@ -1,102 +1,119 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { ClientToServerEvents, ServerToClientEvents } from '@snakesss/shared-types';
+import type {
+  ClientToServerEvents,
+  ServerToClientEvents,
+  AnswerIndex,
+  PlayerAnswer,
+  RoundScore,
+  WinCondition,
+  Player,
+} from '@snakesss/shared-types';
 import { useGameStore } from '../store/gameStore';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 const SERVER_URL = import.meta.env['VITE_SERVER_URL'] ?? '';
 
-let socketInstance: AppSocket | null = null;
+// ─── Singleton socket ─────────────────────────────────────────────────────────
+let _socket: AppSocket | null = null;
 
 export function getSocket(): AppSocket {
-  if (!socketInstance) {
-    socketInstance = io(SERVER_URL, {
+  if (!_socket) {
+    _socket = io(SERVER_URL, {
       autoConnect: false,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
     });
   }
-  return socketInstance;
+  return _socket;
 }
 
-export function useSocket() {
-  const socketRef = useRef<AppSocket>(getSocket());
+// ─── Register all listeners ONCE (call only from App root) ────────────────────
+let _listenersRegistered = false;
 
+export function useSocketListeners(): void {
   useEffect(() => {
-    const socket = socketRef.current;
+    if (_listenersRegistered) return;
+    _listenersRegistered = true;
 
+    const socket = getSocket();
     socket.connect();
 
-    const onConnect = () => {
+    socket.on('connect', () => {
       useGameStore.setState({ isConnected: true, socketId: socket.id ?? null });
-    };
+    });
 
-    const onDisconnect = () => {
+    socket.on('disconnect', () => {
       useGameStore.setState({ isConnected: false });
-    };
+    });
 
-    const onStateFull = (state: Parameters<ServerToClientEvents['state:full']>[0]) => {
+    socket.on('state:full', (state) => {
       useGameStore.getState().setGameState(state);
-    };
+    });
 
-    const onStatePatch = (patch: Parameters<ServerToClientEvents['state:patch']>[0]) => {
+    socket.on('state:patch', (patch) => {
       useGameStore.getState().patchGameState(patch);
-    };
+    });
 
-    const onPlayerRole = (role: Parameters<ServerToClientEvents['player:role']>[0]) => {
-      useGameStore.getState().setMyRole(role);
-    };
-
-    const onChatMessage = (message: Parameters<ServerToClientEvents['chat:message']>[0]) => {
-      useGameStore.getState().addMessage(message);
-    };
-
-    const onChatTyping = (indicator: Parameters<ServerToClientEvents['chat:typing']>[0]) => {
-      useGameStore.getState().setTyping(indicator);
-    };
-
-    const onVoteUpdate = (votes: Parameters<ServerToClientEvents['vote:update']>[0]) => {
-      useGameStore.getState().updateVotes(votes);
-    };
-
-    const onRoundResult = (result: Parameters<ServerToClientEvents['round:result']>[0]) => {
-      useGameStore.getState().setRoundResult(result);
-    };
-
-    const onGameEnded = (winner: Parameters<ServerToClientEvents['game:ended']>[0]) => {
-      useGameStore.getState().setWinner(winner);
-    };
-
-    const onPhaseChanged = (
-      phase: Parameters<ServerToClientEvents['phase:changed']>[0],
-      endsAt: Parameters<ServerToClientEvents['phase:changed']>[1]
-    ) => {
-      const gs = useGameStore.getState().gameState;
-      // If phase is 'elimination', show the eliminated player overlay
-      if (phase === 'elimination' && gs) {
-        const justEliminated = gs.players.find((p) => !p.isAlive);
-        if (justEliminated) {
-          useGameStore.getState().setShowElimination(true, justEliminated);
-          setTimeout(() => useGameStore.getState().setShowElimination(false), 3500);
-        }
+    socket.on('player:role', (role) => {
+      // Only show role reveal once — if we already have a role, just update silently
+      const store = useGameStore.getState();
+      const hadRole = !!store.myRole;
+      store.setMyRole(role);
+      if (hadRole) {
+        // Don't pop the reveal again if we already saw it
+        useGameStore.setState({ showRoleReveal: false });
       }
-      useGameStore.getState().patchGameState({ phase, phaseEndsAt: endsAt });
-    };
+    });
 
-    const onPlayerJoined = (player: Parameters<ServerToClientEvents['player:joined']>[0]) => {
+    socket.on('quiz:question', (_question, snakeAnswer) => {
+      useGameStore.getState().setSnakeAnswer(snakeAnswer ?? null);
+      useGameStore.setState({ hasSubmittedAnswer: false, answerCount: 0 });
+    });
+
+    socket.on('quiz:answer_update', (count, total) => {
+      useGameStore.setState({ answerCount: count, answerTotal: total });
+    });
+
+    socket.on('quiz:reveal', (answers, correctIndex, scores) => {
+      useGameStore.getState().setQuizReveal(answers, correctIndex, scores);
+    });
+
+    socket.on('chat:message', (message) => {
+      useGameStore.getState().addMessage(message);
+    });
+
+    socket.on('chat:typing', (indicator) => {
+      useGameStore.getState().setTyping(indicator);
+    });
+
+    socket.on('vote:update', (votes) => {
+      useGameStore.getState().updateVotes(votes);
+    });
+
+    socket.on('round:result', (result) => {
+      useGameStore.getState().setRoundResult(result);
+    });
+
+    socket.on('game:ended', (winner: WinCondition, players: Player[]) => {
+      useGameStore.getState().setWinner(winner);
+      useGameStore.getState().patchGameState({ players, phase: 'ended', winner });
+    });
+
+    socket.on('phase:changed', (phase, endsAt) => {
+      useGameStore.getState().patchGameState({ phase, phaseEndsAt: endsAt });
+    });
+
+    socket.on('player:joined', (player) => {
       const current = useGameStore.getState().gameState;
       if (!current) return;
-      // Avoid duplicates
       if (current.players.some((p) => p.id === player.id)) return;
-      useGameStore.getState().setGameState({
-        ...current,
-        players: [...current.players, player],
-      });
-    };
+      useGameStore.getState().setGameState({ ...current, players: [...current.players, player] });
+    });
 
-    const onPlayerLeft = (playerId: Parameters<ServerToClientEvents['player:left']>[0]) => {
+    socket.on('player:left', (playerId) => {
       const current = useGameStore.getState().gameState;
       if (!current) return;
       useGameStore.getState().patchGameState({
@@ -104,151 +121,87 @@ export function useSocket() {
           p.id === playerId ? { ...p, isConnected: false } : p
         ),
       });
-    };
+    });
 
-    const onError = (msg: string) => {
-      console.error('[Socket error]', msg);
-    };
+    socket.on('error', (msg) => {
+      console.error('[Socket]', msg);
+    });
 
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    socket.on('state:full', onStateFull);
-    socket.on('state:patch', onStatePatch);
-    socket.on('player:role', onPlayerRole);
-    socket.on('chat:message', onChatMessage);
-    socket.on('chat:typing', onChatTyping);
-    socket.on('vote:update', onVoteUpdate);
-    socket.on('round:result', onRoundResult);
-    socket.on('game:ended', onGameEnded);
-    socket.on('phase:changed', onPhaseChanged);
-    socket.on('player:joined', onPlayerJoined);
-    socket.on('player:left', onPlayerLeft);
-    socket.on('error', onError);
-
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-      socket.off('state:full', onStateFull);
-      socket.off('state:patch', onStatePatch);
-      socket.off('player:role', onPlayerRole);
-      socket.off('chat:message', onChatMessage);
-      socket.off('chat:typing', onChatTyping);
-      socket.off('vote:update', onVoteUpdate);
-      socket.off('round:result', onRoundResult);
-      socket.off('game:ended', onGameEnded);
-      socket.off('phase:changed', onPhaseChanged);
-      socket.off('player:joined', onPlayerJoined);
-      socket.off('player:left', onPlayerLeft);
-      socket.off('error', onError);
-    };
+    // No cleanup — socket lives for the app lifetime
   }, []);
+}
 
-  const createRoom = useCallback(
-    (username: string, avatar: string, settings?: Record<string, unknown>) => {
-      return new Promise<string>((resolve, reject) => {
-        const socket = socketRef.current;
-        socket.emit(
-          'room:create',
-          {
-            username,
-            avatar: avatar as Parameters<ClientToServerEvents['room:create']>[0]['avatar'],
-            settings,
-          },
-          (roomId) => {
-            if (roomId) {
-              useGameStore.setState({ playerId: socket.id ?? null, username });
-              resolve(roomId);
-            } else {
-              reject(new Error('Failed to create room'));
-            }
-          }
-        );
-      });
-    },
-    []
-  );
+// ─── Actions hook (call from any component, no listeners) ────────────────────
 
-  const joinRoom = useCallback(
-    (roomId: string, username: string, avatar: string, asSpectator = false) => {
-      return new Promise<void>((resolve, reject) => {
-        const socket = socketRef.current;
-        socket.emit(
-          'room:join',
-          {
-            roomId,
-            username,
-            avatar: avatar as Parameters<ClientToServerEvents['room:join']>[0]['avatar'],
-            asSpectator,
-          },
-          (result) => {
-            if ('error' in result) {
-              reject(new Error(result.error));
-            } else {
-              useGameStore.setState({ playerId: socket.id ?? null, username });
-              resolve();
-            }
-          }
-        );
-      });
-    },
-    []
-  );
+export function useSocket() {
+  const socket = getSocket();
 
-  const sendMessage = useCallback(
-    (content: string, type: 'chat' | 'accusation' | 'defense' = 'chat') => {
-      socketRef.current.emit('chat:send', { content, type });
-    },
-    []
-  );
+  const createRoom = (username: string, avatar: string, settings?: Record<string, unknown>) =>
+    new Promise<string>((resolve, reject) => {
+      socket.emit(
+        'room:create',
+        { username, avatar: avatar as Parameters<ClientToServerEvents['room:create']>[0]['avatar'], settings },
+        (roomId) => {
+          if (roomId) {
+            useGameStore.setState({ playerId: socket.id ?? null, username });
+            resolve(roomId);
+          } else reject(new Error('Failed to create room'));
+        }
+      );
+    });
 
-  const castVote = useCallback((targetId: string) => {
-    socketRef.current.emit('vote:cast', { targetId });
-  }, []);
-
-  const startGame = useCallback(() => {
-    socketRef.current.emit('room:start');
-  }, []);
-
-  const sendTyping = useCallback((isTyping: boolean) => {
-    socketRef.current.emit('chat:typing', isTyping);
-  }, []);
-
-  const updateSettings = useCallback(
-    (settings: Parameters<ClientToServerEvents['room:settings:update']>[0]['settings']) => {
-      socketRef.current.emit('room:settings:update', { settings });
-    },
-    []
-  );
-
-  const addBot = useCallback(
-    (persona: 'aggressive' | 'silent_strategist' | 'chaotic_liar' = 'chaotic_liar') => {
-      return new Promise<string>((resolve, reject) => {
-        socketRef.current.emit('room:add_bot', persona, (result) => {
+  const joinRoom = (roomId: string, username: string, avatar: string, asSpectator = false) =>
+    new Promise<void>((resolve, reject) => {
+      socket.emit(
+        'room:join',
+        { roomId, username, avatar: avatar as Parameters<ClientToServerEvents['room:join']>[0]['avatar'], asSpectator },
+        (result) => {
           if ('error' in result) reject(new Error(result.error));
-          else resolve(result.botId);
-        });
+          else {
+            useGameStore.setState({ playerId: socket.id ?? null, username });
+            resolve();
+          }
+        }
+      );
+    });
+
+  const sendMessage = (content: string, type: 'chat' | 'accusation' | 'defense' = 'chat') => {
+    socket.emit('chat:send', { content, type });
+  };
+
+  const castVote = (targetId: string) => { socket.emit('vote:cast', { targetId }); };
+
+  const startGame = () => { socket.emit('room:start'); };
+
+  const sendTyping = (isTyping: boolean) => { socket.emit('chat:typing', isTyping); };
+
+  const updateSettings = (
+    settings: Parameters<ClientToServerEvents['room:settings:update']>[0]['settings']
+  ) => { socket.emit('room:settings:update', { settings }); };
+
+  const addBot = (persona: 'aggressive' | 'silent_strategist' | 'chaotic_liar' = 'chaotic_liar') =>
+    new Promise<string>((resolve, reject) => {
+      socket.emit('room:add_bot', persona, (result) => {
+        if ('error' in result) reject(new Error(result.error));
+        else resolve(result.botId);
       });
-    },
-    []
-  );
+    });
 
-  const kickPlayerFromRoom = useCallback((targetId: string) => {
-    socketRef.current.emit('room:kick', targetId);
-  }, []);
+  const kickPlayerFromRoom = (targetId: string) => { socket.emit('room:kick', targetId); };
 
-  const adminAction = useCallback(
-    (
-      action: 'kick' | 'ban' | 'inject_bot' | 'pause' | 'resume' | 'edit_role',
-      targetId?: string,
-      data?: Record<string, unknown>
-    ) => {
-      socketRef.current.emit('admin:action', { action, targetId, data });
-    },
-    []
-  );
+  const submitAnswer = (answerIndex: AnswerIndex) => {
+    socket.emit('quiz:submit_answer', { answerIndex });
+    useGameStore.setState({ hasSubmittedAnswer: true });
+  };
+
+  const adminAction = (
+    action: 'kick' | 'ban' | 'inject_bot' | 'pause' | 'resume' | 'edit_role',
+    targetId?: string,
+    data?: Record<string, unknown>
+  ) => { socket.emit('admin:action', { action, targetId, data }); };
 
   return {
-    socket: socketRef.current,
+    socket,
     createRoom,
     joinRoom,
     sendMessage,
@@ -256,8 +209,9 @@ export function useSocket() {
     startGame,
     sendTyping,
     updateSettings,
-    adminAction,
     addBot,
     kickPlayerFromRoom,
+    submitAnswer,
+    adminAction,
   };
 }

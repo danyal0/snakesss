@@ -12,6 +12,7 @@ function makePlayer(id: string): Player {
     isRoomManager: false,
     isConnected: true,
     isAlive: true,
+    score: 0,
     joinedAt: Date.now(),
     lastSeenAt: Date.now(),
   };
