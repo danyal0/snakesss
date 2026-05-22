@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import path from 'path';
+import { leaderboard } from './LeaderboardStore';
 import { RoomManager } from './RoomManager';
 import { registerSocketHandlers } from './SocketHandler';
 import { createAdminRouter } from './AdminAPI';
@@ -55,6 +56,22 @@ app.get('/health', (_req, res) => {
 app.get('/api/rooms', (_req, res) => {
   const publicRooms = roomManager.getRoomList().filter((r) => !r.settings.isPrivate);
   res.json({ success: true, data: publicRooms });
+});
+
+app.get('/api/leaderboard', (_req, res) => {
+  const top5 = leaderboard.getTop(5);
+  res.json({ success: true, data: top5 });
+});
+
+app.get('/api/leaderboard/top/:n', (req, res) => {
+  const n = Math.min(parseInt(req.params['n'] ?? '10', 10), 50);
+  res.json({ success: true, data: leaderboard.getTop(n) });
+});
+
+app.get('/api/leaderboard/player/:username', (req, res) => {
+  const entry = leaderboard.getPlayerStats(req.params['username'] ?? '');
+  if (!entry) { res.status(404).json({ success: false, error: 'Player not found' }); return; }
+  res.json({ success: true, data: entry });
 });
 
 // Serve web app static files

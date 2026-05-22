@@ -4,15 +4,18 @@ import {
   RoleDistribution,
   Player,
   RoomSettings,
+  getOptimalRoleDistribution,
 } from '@snakesss/shared-types';
 import { shuffleArray } from './utils';
 
 export function buildRolePool(settings: RoomSettings, playerCount: number): RoleType[] {
-  const { roleDistribution, advancedRoles } = settings;
   const pool: RoleType[] = [];
 
-  let snakes = roleDistribution.snakes;
-  const mongooses = advancedRoles ? Math.min(1, roleDistribution.mongooses) : 0;
+  // Use Big Potato optimal distribution table
+  const dist = getOptimalRoleDistribution(playerCount);
+
+  let snakes = dist.snakes;
+  const mongooses = settings.advancedRoles ? dist.mongooses : 0;
   let humans = playerCount - snakes - mongooses;
 
   if (humans < 1) {

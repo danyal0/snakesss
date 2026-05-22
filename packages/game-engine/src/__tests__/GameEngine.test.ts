@@ -8,7 +8,7 @@ function createEngine() {
     managerName: 'Alice',
     managerAvatar: '🦊' as AvatarEmoji,
     settings: {
-      roleDistribution: { snakes: 1, humans: 2, mongooses: 0 },
+      roleDistribution: { snakes: 1, humans: 2, mongooses: 0 }, // overridden by optimal distribution
       maxPlayers: 8,
       botsEnabled: false,
       botCount: 0,
@@ -70,6 +70,7 @@ describe('GameEngine', () => {
     expect(roles.size).toBe(3);
     const types = Array.from(roles.values()).map((r) => r.type);
     expect(types).toContain('snake');
+    // 3-player: 1 snake, 2 humans per Big Potato
     expect(types.filter((t) => t === 'human').length).toBe(2);
   });
 

@@ -9,6 +9,7 @@ import {
 } from '@snakesss/shared-types';
 import { RoomManager } from './RoomManager';
 import { verifyAdminToken } from './auth';
+import { leaderboard } from './LeaderboardStore';
 
 type AppSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
@@ -366,6 +367,8 @@ async function handlePhaseTransition(
         engine.endGame(winner);
         const finalState = engine.getState();
         io.to(`room:${roomId}`).emit('game:ended', winner, finalState.players);
+        // Record to persistent leaderboard immediately on game end
+        leaderboard.recordGame({ players: finalState.players, winner });
       } else {
         engine.transitionToScores();
       }
@@ -380,6 +383,8 @@ async function handlePhaseTransition(
         engine.endGame(winner);
         const finalState = engine.getState();
         io.to(`room:${roomId}`).emit('game:ended', winner, finalState.players);
+        // Record to persistent leaderboard
+        leaderboard.recordGame({ players: finalState.players, winner });
       } else {
         engine.nextRound();
         await engine.transitionToQuestion();

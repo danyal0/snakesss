@@ -339,6 +339,9 @@ export class GameEngine {
 
     if (roundVotes.eliminatedId) {
       this.eliminatePlayer(roundVotes.eliminatedId);
+    } else {
+      // No votes cast or all tied with no resolution — skip to scores
+      this.transitionToScores();
     }
   }
 

@@ -8,6 +8,7 @@ import {
   AdminState,
   BotPersona,
 } from '@snakesss/shared-types';
+import { leaderboard } from './LeaderboardStore';
 import {
   GameEngine,
   BotDecisionEngine,
@@ -152,6 +153,11 @@ export class RoomManager {
           durationMs: (state.endedAt ?? Date.now()) - state.startedAt,
           hadBots: state.players.some((p) => p.isBot),
           startedAt: state.startedAt,
+        });
+        // Record to persistent leaderboard (only real human players)
+        leaderboard.recordGame({
+          players: state.players,
+          winner: state.winner as 'humans' | 'snakes' | null,
         });
       }
       room.engine.destroy();

@@ -151,6 +151,28 @@ export interface RoomSettings {
   advancedRoles: boolean; // enables Mongoose role
 }
 
+// Big Potato role distribution table (always includes Mongoose)
+// 4 players: 2 snakes, 1 human, 1 mongoose
+// 5 players: 2 snakes, 2 humans, 1 mongoose
+// 6 players: 3 snakes, 2 humans, 1 mongoose
+// 7 players: 3 snakes, 3 humans, 1 mongoose
+// 8 players: 4 snakes, 3 humans, 1 mongoose
+export function getOptimalRoleDistribution(playerCount: number): RoleDistribution {
+  const table: Record<number, RoleDistribution> = {
+    3: { snakes: 1, humans: 2, mongooses: 0 },
+    4: { snakes: 2, humans: 1, mongooses: 1 },
+    5: { snakes: 2, humans: 2, mongooses: 1 },
+    6: { snakes: 3, humans: 2, mongooses: 1 },
+    7: { snakes: 3, humans: 3, mongooses: 1 },
+    8: { snakes: 4, humans: 3, mongooses: 1 },
+    9: { snakes: 4, humans: 4, mongooses: 1 },
+    10: { snakes: 5, humans: 4, mongooses: 1 },
+    11: { snakes: 5, humans: 5, mongooses: 1 },
+    12: { snakes: 6, humans: 5, mongooses: 1 },
+  };
+  return table[playerCount] ?? table[8]!;
+}
+
 export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   maxPlayers: 8,
   botsEnabled: false,
@@ -159,10 +181,10 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   voteTimer: 30,
   questionTimer: 30,
   totalRounds: 6,
-  roleDistribution: { snakes: 2, humans: 5, mongooses: 0 },
+  roleDistribution: { snakes: 2, humans: 1, mongooses: 1 }, // 4-player default
   isPrivate: false,
   allowSpectators: true,
-  advancedRoles: false,
+  advancedRoles: true, // mongoose enabled by default per Big Potato rules
 };
 
 // ─── Game Event ───────────────────────────────────────────────────────────────
@@ -324,6 +346,21 @@ export interface Analytics {
   snakeWins: number;
   aiVsHumanWinRate: { ai: number; human: number };
   votePatternsPerRound: number[];
+}
+
+// ─── Leaderboard ─────────────────────────────────────────────────────────────
+
+export interface LeaderboardEntry {
+  rank: number;
+  username: string;
+  avatar: AvatarEmoji;
+  totalScore: number;       // cumulative across all games
+  gamesPlayed: number;
+  gamesWon: number;
+  bestGameScore: number;    // highest single-game score
+  snakeGames: number;       // games played as a snake
+  humanGames: number;       // games played as human/mongoose
+  lastPlayed: number;       // UTC ms timestamp
 }
 
 export interface ApiResponse<T> {

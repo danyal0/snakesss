@@ -5,6 +5,7 @@ import { useAdminStore } from '../store/adminStore';
 import { useAdminSocket } from '../hooks/useAdminSocket';
 import { useAdminAPI } from '../hooks/useAdminAPI';
 import { OverviewPanel } from '../components/OverviewPanel';
+import { LeaderboardPanel } from '../components/LeaderboardPanel';
 import { RoomListPanel } from '../components/RoomListPanel';
 import { RoomDetailPanel } from '../components/RoomDetailPanel';
 import { AnalyticsPanel } from '../components/AnalyticsPanel';
@@ -24,6 +25,7 @@ export function DashboardScreen() {
     { path: '/dashboard', label: '📊 Overview', exact: true },
     { path: '/dashboard/rooms', label: '🏠 Rooms' },
     { path: '/dashboard/analytics', label: '📈 Analytics' },
+    { path: '/dashboard/leaderboard', label: '🏆 Leaderboard' },
   ];
 
   return (
@@ -93,6 +95,7 @@ export function DashboardScreen() {
           <Route path="/rooms" element={<RoomListPanel adminAction={adminAction} spectateRoom={spectateRoom} />} />
           <Route path="/rooms/:roomId" element={<RoomDetailPanel adminAction={adminAction} />} />
           <Route path="/analytics" element={<AnalyticsPanel analytics={adminState?.analytics ?? null} />} />
+          <Route path="/leaderboard" element={<LeaderboardPanel />} />
         </Routes>
       </div>
     </div>
