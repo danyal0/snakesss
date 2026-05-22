@@ -4,20 +4,22 @@ import type {
   ClientToServerEvents,
   ServerToClientEvents,
   AnswerIndex,
-  PlayerAnswer,
-  RoundScore,
   WinCondition,
   Player,
+  AvatarEmoji,
 } from '@snakesss/shared-types';
 import { useGameStore } from '../store/gameStore';
-import { saveSession, loadSession } from './useSession';
-import type { AvatarEmoji } from '@snakesss/shared-types';
+import {
+  applyRoomIdentity,
+  loadSession,
+  resolvePlayerId,
+  saveSession,
+} from './useSession';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 const SERVER_URL = import.meta.env['VITE_SERVER_URL'] ?? '';
 
-// ─── Singleton socket ─────────────────────────────────────────────────────────
 let _socket: AppSocket | null = null;
 
 export function getSocket(): AppSocket {
@@ -32,7 +34,6 @@ export function getSocket(): AppSocket {
   return _socket;
 }
 
-// ─── Register all listeners ONCE (call only from App root) ────────────────────
 let _listenersRegistered = false;
 
 export function useSocketListeners(): void {
@@ -45,6 +46,32 @@ export function useSocketListeners(): void {
 
     socket.on('connect', () => {
       useGameStore.setState({ isConnected: true, socketId: socket.id ?? null });
+
+      const { gameState, username } = useGameStore.getState();
+      if (!gameState?.roomId || gameState.phase === 'lobby' || !username) return;
+
+      const session = loadSession(gameState.roomId);
+      if (!session) return;
+
+      socket.emit(
+        'room:join',
+        {
+          roomId: gameState.roomId,
+          username: session.username,
+          avatar: session.avatar as AvatarEmoji,
+          asSpectator: false,
+        },
+        (result) => {
+          if ('error' in result) return;
+          applyRoomIdentity(
+            result,
+            gameState.roomId,
+            session.username,
+            session.avatar,
+            socket.id ?? null
+          );
+        }
+      );
     });
 
     socket.on('disconnect', () => {
@@ -52,27 +79,11 @@ export function useSocketListeners(): void {
     });
 
     socket.on('state:full', (state) => {
-      useGameStore.getState().setGameState(state);
-
-      // When rejoining mid-game (e.g. page refresh), reconstitute ephemeral
-      // UI state that is normally set by specific socket events:
-
-      // 1. answer_reveal: populate quiz reveal from game state directly
-      //    (quiz:reveal only fires live; after refresh only state:full arrives)
-      if (state.phase === 'answer_reveal' && state.currentQuestion && state.answersRevealed.length > 0) {
-        const roundScores = state.roundScores[state.round] ?? [];
-        useGameStore.getState().setQuizReveal(
-          state.answersRevealed,
-          state.currentQuestion.correctIndex,
-          roundScores
-        );
-      }
-
-      // 2. question phase: restore answer count so progress bar is correct
-      if (state.phase === 'question') {
-        const answered = Object.keys(state.answers).length;
-        const total = state.players.filter((p) => p.isAlive && !p.isSpectator).length;
-        useGameStore.setState({ answerCount: answered, answerTotal: total });
+      const store = useGameStore.getState();
+      store.setGameState(state);
+      if (store.username && !store.playerId) {
+        const playerId = resolvePlayerId(state, store.username, socket.id ?? null);
+        if (playerId) useGameStore.setState({ playerId });
       }
     });
 
@@ -81,12 +92,10 @@ export function useSocketListeners(): void {
     });
 
     socket.on('player:role', (role) => {
-      // Only show role reveal once — if we already have a role, just update silently
       const store = useGameStore.getState();
       const hadRole = !!store.myRole;
       store.setMyRole(role);
       if (hadRole) {
-        // Don't pop the reveal again if we already saw it
         useGameStore.setState({ showRoleReveal: false });
       }
     });
@@ -148,17 +157,11 @@ export function useSocketListeners(): void {
 
     socket.on('error', (msg) => {
       console.error('[Socket]', msg);
-      // Store last socket error so UI can display it
       useGameStore.setState({ lastSocketError: msg });
-      // Auto-clear after 4 seconds
       setTimeout(() => useGameStore.setState({ lastSocketError: null }), 4000);
     });
-
-    // No cleanup — socket lives for the app lifetime
   }, []);
 }
-
-// ─── Actions hook (call from any component, no listeners) ────────────────────
 
 export function useSocket() {
   const socket = getSocket();
@@ -171,6 +174,7 @@ export function useSocket() {
         (roomId) => {
           if (roomId) {
             useGameStore.setState({ playerId: socket.id ?? null, username });
+            saveSession({ roomId, username, avatar, savedAt: Date.now() });
             resolve(roomId);
           } else reject(new Error('Failed to create room'));
         }
@@ -185,7 +189,7 @@ export function useSocket() {
         (result) => {
           if ('error' in result) reject(new Error(result.error));
           else {
-            useGameStore.setState({ playerId: socket.id ?? null, username });
+            applyRoomIdentity(result, roomId, username, avatar, socket.id ?? null);
             resolve();
           }
         }
@@ -219,6 +223,16 @@ export function useSocket() {
   const submitAnswer = (answerIndex: AnswerIndex) => {
     socket.emit('quiz:submit_answer', { answerIndex });
     useGameStore.setState({ hasSubmittedAnswer: true });
+    setTimeout(() => {
+      const st = useGameStore.getState();
+      if (
+        st.gameState?.phase === 'question' &&
+        st.playerId &&
+        !(st.playerId in st.gameState.answers)
+      ) {
+        useGameStore.setState({ hasSubmittedAnswer: false });
+      }
+    }, 2000);
   };
 
   const adminAction = (

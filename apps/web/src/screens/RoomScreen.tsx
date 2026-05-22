@@ -2,7 +2,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { getSocket } from '../hooks/useSocket';
-import { loadSession, clearSession } from '../hooks/useSession';
+import {
+  loadSession,
+  clearSession,
+  applyRoomIdentity,
+  isRegisteredPlayer,
+} from '../hooks/useSession';
 import type { AvatarEmoji } from '@snakesss/shared-types';
 import { LobbyScreen } from './LobbyScreen';
 import { GameScreen } from './GameScreen';
@@ -19,19 +24,20 @@ export function RoomScreen() {
   useEffect(() => {
     if (!roomId || !isConnected) return;
 
-    // Already have state for this exact room and we're in it as a player
-    if (gameState?.roomId === roomId && playerId) return;
+    if (
+      gameState?.roomId === roomId &&
+      playerId &&
+      isRegisteredPlayer(gameState, playerId)
+    ) {
+      return;
+    }
 
-    // Only attempt auto-rejoin once per mount
     if (hasAttemptedJoin.current) return;
 
     const socket = getSocket();
-
-    // Check if we have a stored session for this room
     const session = loadSession(roomId);
 
     if (session) {
-      // We have a stored identity — try to rejoin as the same player
       hasAttemptedJoin.current = true;
       socket.emit(
         'room:join',
@@ -43,26 +49,20 @@ export function RoomScreen() {
         },
         (result) => {
           if ('error' in result) {
-            // Room gone or rejected — clear session and show error
             clearSession(roomId);
             setJoinError(result.error);
           } else {
-            // Identify ourselves — server may have matched our username to existing slot
-            // The effectivePlayerId is the original player ID (not necessarily socket.id)
-            // We detect it by finding the player with our username in the returned state
-            const me = result.players.find(
-              (p) => p.username.toLowerCase().trim() === session.username.toLowerCase().trim()
-                && !p.isSpectator
+            applyRoomIdentity(
+              result,
+              roomId,
+              session.username,
+              session.avatar,
+              socket.id ?? null
             );
-            useGameStore.setState({
-              playerId: me?.id ?? socket.id ?? null,
-              username: session.username,
-            });
           }
         }
       );
     } else {
-      // No stored session — just spectate to get the state
       hasAttemptedJoin.current = true;
       socket.emit('spectate:room', roomId);
     }

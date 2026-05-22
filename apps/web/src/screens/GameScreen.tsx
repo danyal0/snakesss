@@ -41,13 +41,14 @@ export function GameScreen({ gameState }: GameScreenProps) {
   const hasVoted = selectHasVoted(store);
   const alivePlayers = selectAlivePlayers(store);
 
-  const me = gameState.players.find((p) => p.id === playerId);
+  const me = playerId ? gameState.players.find((p) => p.id === playerId) : undefined;
   const isAlive = me?.isAlive ?? true;
   const isSpectator = me?.isSpectator ?? false;
   const isSnake = myRole?.type === 'snake';
+  const needsRejoin = !playerId || !me;
 
-  // Eliminated players cannot chat — only alive players and spectators can discuss
-  const canChat = gameState.phase === 'discussion' && isAlive && !isSpectator;
+  const canChat =
+    gameState.phase === 'discussion' && isAlive && !isSpectator && !needsRejoin;
 
   // Unread chat badge
   const [lastReadCount, setLastReadCount] = useState(0);
@@ -247,21 +248,9 @@ export function GameScreen({ gameState }: GameScreenProps) {
           {gameState.phase === 'answer_reveal' && (
             <AnswerReveal
               question={gameState.currentQuestion}
-              answers={
-                store.quizRevealAnswers.length > 0
-                  ? store.quizRevealAnswers
-                  : gameState.answersRevealed
-              }
-              correctIndex={
-                store.quizRevealCorrectIndex ??
-                gameState.currentQuestion?.correctIndex ??
-                null
-              }
-              scores={
-                store.quizRevealScores.length > 0
-                  ? store.quizRevealScores
-                  : (gameState.roundScores[gameState.round] ?? [])
-              }
+              answers={gameState.answersRevealed}
+              correctIndex={store.quizRevealCorrectIndex}
+              scores={store.quizRevealScores}
               myPlayerId={playerId}
             />
           )}

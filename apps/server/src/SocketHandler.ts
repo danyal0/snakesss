@@ -73,15 +73,14 @@ export function registerSocketHandlers(
       // When a player refreshes (new socket ID), match them by username so they
       // keep their role, manager status, and score.
       const existingPlayer = engine.getState().players.find(
-        (p) => p.username.toLowerCase().trim() === username.toLowerCase().trim()
-          && !p.isSpectator
-          && !p.isConnected  // only restore disconnected slots
+        (p) =>
+          p.username.toLowerCase().trim() === username.toLowerCase().trim() &&
+          !p.isSpectator
       );
 
       let effectivePlayerId = socket.id;
 
-      if (existingPlayer) {
-        // Restore the existing player slot with the new socket ID
+      if (existingPlayer && !asSpectator) {
         effectivePlayerId = existingPlayer.id;
         engine.reconnectPlayer(existingPlayer.id, socket.id);
       } else {
