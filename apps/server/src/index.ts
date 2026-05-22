@@ -46,9 +46,14 @@ io.use((socket, next) => {
 
 registerSocketHandlers(io, roomManager);
 
+roomManager.setRoomBroadcast((roomId) => {
+  const engine = roomManager.getEngine(roomId);
+  if (engine) io.to(`room:${roomId}`).emit('state:full', engine.getPublicState());
+});
+
 // ── REST API routes ──────────────────────────────────────────────────────────
 
-app.use('/api/admin', createAdminRouter(roomManager));
+app.use('/api/admin', createAdminRouter(roomManager, (roomId) => roomManager.broadcastRoom(roomId)));
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', rooms: roomManager.getRoomList().length, uptime: process.uptime() });

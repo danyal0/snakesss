@@ -54,6 +54,8 @@ export function registerSocketHandlers(
   io: Server<ClientToServerEvents, ServerToClientEvents>,
   roomManager: RoomManager
 ): void {
+  roomManager.setRoomBroadcast((roomId) => emitPublicState(roomId, io, roomManager));
+
   // Broadcast state changes — but do NOT emit player:role here (causes repeated role reveals)
   roomManager.onStateChanged((roomId, state) => {
     emitPublicState(roomId, io, roomManager);
@@ -101,21 +103,38 @@ export function registerSocketHandlers(
       // ── Reconnect: try to restore a disconnected player by username ──────
       // When a player refreshes (new socket ID), match them by username so they
       // keep their role, manager status, and score.
-      const existingPlayer = engine.getState().players.find(
-        (p) => p.username.toLowerCase().trim() === username.toLowerCase().trim()
-          && !p.isSpectator
-          && !p.isConnected  // only restore disconnected slots
-      );
-
       let effectivePlayerId = socket.id;
+      const rejoinPlayerId = _payload.playerId;
 
-      if (existingPlayer) {
-        // Restore the existing player slot with the new socket ID
-        effectivePlayerId = existingPlayer.id;
-        engine.reconnectPlayer(existingPlayer.id, socket.id);
-      } else {
-        const result = engine.addPlayer(socket.id, username, avatar, asSpectator);
-        if (!result.success) { cb({ error: result.error ?? 'Failed to join' }); return; }
+      if (rejoinPlayerId) {
+        const slot = engine.getState().players.find(
+          (p) => p.id === rejoinPlayerId && !p.isSpectator
+        );
+        if (slot?.isConnected) {
+          cb({ error: 'Player already connected in this room' });
+          return;
+        }
+        if (slot && !slot.isConnected) {
+          effectivePlayerId = rejoinPlayerId;
+          engine.reconnectPlayer(rejoinPlayerId, socket.id);
+        }
+      }
+
+      if (effectivePlayerId === socket.id) {
+        const existingPlayer = engine.getState().players.find(
+          (p) =>
+            p.username.toLowerCase().trim() === username.toLowerCase().trim() &&
+            !p.isSpectator &&
+            !p.isConnected
+        );
+
+        if (existingPlayer) {
+          effectivePlayerId = existingPlayer.id;
+          engine.reconnectPlayer(existingPlayer.id, socket.id);
+        } else {
+          const result = engine.addPlayer(socket.id, username, avatar, asSpectator);
+          if (!result.success) { cb({ error: result.error ?? 'Failed to join' }); return; }
+        }
       }
 
       if (roomManager.isBanned(roomId, effectivePlayerId, username)) {
@@ -254,6 +273,7 @@ export function registerSocketHandlers(
       if (!engine) return;
       const message = engine.addMessage(meta.playerId, payload.content, payload.type);
       if (message) io.to(`room:${meta.roomId}`).emit('chat:message', message);
+      else socket.emit('error', 'Message rate limit — slow down');
     });
 
     // ── Chat: Typing ────────────────────────────────────────────────────────
@@ -297,22 +317,31 @@ export function registerSocketHandlers(
 
       switch (payload.action) {
         case 'kick':
-          if (payload.targetId) engine.kickPlayer(payload.targetId);
+          if (payload.targetId) {
+            engine.kickPlayer(payload.targetId);
+            engine.recordAdminAction('kick', payload.targetId);
+          }
           break;
         case 'ban':
-          if (payload.targetId) roomManager.banPlayer(roomId, payload.targetId);
+          if (payload.targetId) {
+            roomManager.banPlayer(roomId, payload.targetId);
+            engine.recordAdminAction('ban', payload.targetId);
+          }
           break;
         case 'inject_bot': {
           const persona = payload.data?.['persona'] as string ?? 'chaotic_liar';
-          roomManager.injectBot(roomId, persona as 'aggressive' | 'silent_strategist' | 'chaotic_liar');
+          const botId = roomManager.injectBot(roomId, persona as 'aggressive' | 'silent_strategist' | 'chaotic_liar');
+          if (botId) engine.recordAdminAction('inject_bot', botId, { persona });
           break;
         }
         case 'pause':
           clearRoomBotTimers(roomId);
           engine.pause();
+          engine.recordAdminAction('pause');
           break;
         case 'resume':
           engine.resume();
+          engine.recordAdminAction('resume');
           break;
       }
       emitPublicState(roomId, io, roomManager);
@@ -321,9 +350,15 @@ export function registerSocketHandlers(
 
     // ── Spectate ────────────────────────────────────────────────────────────
     socket.on('spectate:room', (roomId) => {
-      socket.join(`room:${roomId}`);
       const engine = roomManager.getEngine(roomId);
-      if (engine) socket.emit('state:full', engine.getPublicState());
+      if (!engine) return;
+      const internal = engine.getState();
+      if (!internal.settings.allowSpectators && internal.phase !== 'lobby') {
+        socket.emit('error', 'Spectators not allowed in this room');
+        return;
+      }
+      socket.join(`room:${roomId}`);
+      socket.emit('state:full', engine.getSpectatorPublicState());
     });
 
     // ── Disconnect ──────────────────────────────────────────────────────────

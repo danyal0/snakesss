@@ -3,7 +3,10 @@ import { leaderboard } from './LeaderboardStore';
 import { RoomManager } from './RoomManager';
 import { requireAdmin, handleAdminLogin } from './auth';
 
-export function createAdminRouter(roomManager: RoomManager): Router {
+export function createAdminRouter(
+  roomManager: RoomManager,
+  broadcastRoom?: (roomId: string) => void
+): Router {
   const router = Router();
 
   router.post('/login', handleAdminLogin);
@@ -25,6 +28,8 @@ export function createAdminRouter(roomManager: RoomManager): Router {
     const engine = roomManager.getEngine(req.params['roomId'] ?? '');
     if (!engine) { res.status(404).json({ success: false, error: 'Room not found' }); return; }
     engine.pause();
+    engine.recordAdminAction('pause');
+    broadcastRoom?.(req.params['roomId'] ?? '');
     res.json({ success: true });
   });
 
@@ -32,19 +37,27 @@ export function createAdminRouter(roomManager: RoomManager): Router {
     const engine = roomManager.getEngine(req.params['roomId'] ?? '');
     if (!engine) { res.status(404).json({ success: false, error: 'Room not found' }); return; }
     engine.resume();
+    engine.recordAdminAction('resume');
+    broadcastRoom?.(req.params['roomId'] ?? '');
     res.json({ success: true });
   });
 
   router.post('/rooms/:roomId/kick/:playerId', requireAdmin, (req, res) => {
     const engine = roomManager.getEngine(req.params['roomId'] ?? '');
     if (!engine) { res.status(404).json({ success: false, error: 'Room not found' }); return; }
-    engine.kickPlayer(req.params['playerId'] ?? '');
+    const kid = req.params['playerId'] ?? '';
+    engine.kickPlayer(kid);
+    engine.recordAdminAction('kick', kid);
+    broadcastRoom?.(req.params['roomId'] ?? '');
     res.json({ success: true });
   });
 
   router.post('/rooms/:roomId/ban/:playerId', requireAdmin, (req, res) => {
     const roomId = req.params['roomId'] ?? '';
-    roomManager.banPlayer(roomId, req.params['playerId'] ?? '');
+    const bid = req.params['playerId'] ?? '';
+    roomManager.banPlayer(roomId, bid);
+    roomManager.getEngine(roomId)?.recordAdminAction('ban', bid);
+    broadcastRoom?.(roomId);
     res.json({ success: true });
   });
 
@@ -55,6 +68,8 @@ export function createAdminRouter(roomManager: RoomManager): Router {
       (persona as 'aggressive' | 'silent_strategist' | 'chaotic_liar') ?? 'chaotic_liar'
     );
     if (!botId) { res.status(400).json({ success: false, error: 'Could not inject bot' }); return; }
+    roomManager.getEngine(req.params['roomId'] ?? '')?.recordAdminAction('inject_bot', botId, { persona });
+    broadcastRoom?.(req.params['roomId'] ?? '');
     res.json({ success: true, data: { botId } });
   });
 
@@ -66,7 +81,9 @@ export function createAdminRouter(roomManager: RoomManager): Router {
   });
 
   router.post('/rooms/:roomId/close', requireAdmin, (req, res) => {
-    roomManager.closeRoom(req.params['roomId'] ?? '');
+    const cid = req.params['roomId'] ?? '';
+    roomManager.getEngine(cid)?.recordAdminAction('close_room');
+    roomManager.closeRoom(cid);
     res.json({ success: true });
   });
 

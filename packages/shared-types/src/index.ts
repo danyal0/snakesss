@@ -204,7 +204,8 @@ export type GameEventType =
   | 'player_left'
   | 'bot_injected'
   | 'game_paused'
-  | 'game_resumed';
+  | 'game_resumed'
+  | 'admin_action';
 
 export interface GameEvent {
   id: string;
@@ -224,8 +225,8 @@ export interface GameState {
   players: Player[];
   // Quiz
   currentQuestion: QuizQuestion | null;
-  answers: Record<string, AnswerIndex>;
-  answeredPlayerIds?: string[];
+  answers: Record<string, AnswerIndex>
+  answeredPlayerIds?: string[];          // playerId → answerIndex (hidden during question)
   answersRevealed: PlayerAnswer[];               // shown after reveal
   roundScores: Record<number, RoundScore[]>;     // round → scores
   // Elimination
@@ -252,6 +253,7 @@ export interface JoinRoomPayload {
   username: string;
   avatar: AvatarEmoji;
   asSpectator: boolean;
+  playerId?: string;
 }
 
 export interface CreateRoomPayload {
@@ -313,11 +315,7 @@ export interface ServerToClientEvents {
   'quiz:reveal': (answers: PlayerAnswer[], correctIndex: AnswerIndex, scores: RoundScore[]) => void;
   'chat:message': (message: ChatMessage) => void;
   'chat:typing': (indicator: TypingIndicator) => void;
-  'vote:update': (
-    voteCounts: Record<string, number>,
-    castCount: number,
-    totalVoters: number
-  ) => void;
+  'vote:update': (voteCounts: Record<string, number>, castCount: number, totalVoters: number) => void;
   'round:result': (result: RoundVotes) => void;
   'game:ended': (winner: WinCondition, scores: Player[]) => void;
   'error': (message: string) => void;

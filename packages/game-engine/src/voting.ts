@@ -47,9 +47,9 @@ export function resolveTie(
   if (sorted.length === 0) return null;
 
   const tied = sorted.filter(([, c]) => c === sorted[0][1]);
-  // Random tie-breaker among tied candidates
-  const winner = tied[Math.floor(Math.random() * tied.length)];
-  const [winId, winCount] = winner;
+  // Deterministic tie-breaker (lowest player id wins)
+  tied.sort((a, b) => a[0].localeCompare(b[0]));
+  const [winId, winCount] = tied[0]!;
   const targetPlayer = alivePlayers.find((p) => p.id === winId);
 
   return {

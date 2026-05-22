@@ -46,3 +46,29 @@ export function sanitizePublicState(
 export function isTimedPhase(phase: GamePhase): boolean {
   return TIMED_PHASES.includes(phase);
 }
+
+/** Extra redaction for spectators — no live votes or unrevealed round details. */
+export function sanitizeSpectatorState(
+  state: GameState,
+  answeredPlayerIds?: string[]
+): GameState {
+  const base = sanitizePublicState(state, answeredPlayerIds);
+  const showVoteHistory =
+    state.phase === 'vote_reveal' ||
+    state.phase === 'elimination' ||
+    state.phase === 'scores' ||
+    state.phase === 'ended';
+
+  return {
+    ...base,
+    votes: {},
+    roundHistory: showVoteHistory
+      ? base.roundHistory
+      : base.roundHistory.map((rh) => ({
+          ...rh,
+          votes: [],
+          result: null,
+          eliminatedId: null,
+        })),
+  };
+}

@@ -9,6 +9,7 @@ export type { PersonaConfig } from './ai/personas';
 export { getRandomQuestion, generateAIQuestion, resetQuestionCycle } from './questions';
 export {
   sanitizePublicState,
+  sanitizeSpectatorState,
   stripAnswerRoles,
   buildVoteTally,
   isTimedPhase,

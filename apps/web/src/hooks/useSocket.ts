@@ -50,6 +50,7 @@ function rejoinFromSession(socket: AppSocket, roomId: string): void {
       username: session.username,
       avatar: session.avatar as AvatarEmoji,
       asSpectator: false,
+      playerId: session.playerId,
     },
     (result) => {
       _joinInFlight = null;
@@ -207,7 +208,7 @@ export function useSocket() {
     new Promise<void>((resolve, reject) => {
       socket.emit(
         'room:join',
-        { roomId, username, avatar: avatar as Parameters<ClientToServerEvents['room:join']>[0]['avatar'], asSpectator },
+        { roomId, username, avatar: avatar as Parameters<ClientToServerEvents['room:join']>[0]['avatar'], asSpectator, playerId: loadSession(roomId)?.playerId },
         (result) => {
           if ('error' in result) reject(new Error(result.error));
           else {

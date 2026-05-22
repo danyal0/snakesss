@@ -19,7 +19,7 @@ import { assignRoles, checkWinCondition, revealRole, calculateRoundScores } from
 import { buildRoundVotes } from './voting';
 import { generateId, generateRoomCode } from './utils';
 import { getRandomQuestion, generateAIQuestion } from './questions';
-import { isTimedPhase, sanitizePublicState } from './publicState';
+import { isTimedPhase, sanitizePublicState, sanitizeSpectatorState } from './publicState';
 
 export interface CreateRoomOptions {
   managerId: string;
@@ -39,6 +39,13 @@ export class GameEngine {
   private onStateChange?: (state: GameState) => void;
   private onEvent?: (event: GameEvent) => void;
   private onPhaseEnd?: (phase: GamePhase) => void;
+  private chatTimestamps = new Map<string, number[]>();
+  private static readonly MAX_CHAT = 250;
+  private static readonly MAX_TIMELINE = 400;
+  private static readonly CHAT_BURST_WINDOW_MS = 10_000;
+  private static readonly CHAT_BURST_MAX = 8;
+  private static readonly CHAT_MIN_INTERVAL_MS = 400;
+
 
   constructor(options: CreateRoomOptions) {
     const settings: RoomSettings = {
@@ -104,6 +111,12 @@ export class GameEngine {
     return sanitizePublicState(this.getState(), answeredIds);
   }
 
+  getSpectatorPublicState(): GameState {
+    const answeredIds =
+      this.state.phase === 'question' ? Array.from(this.answerMap.keys()) : undefined;
+    return sanitizeSpectatorState(this.getState(), answeredIds);
+  }
+
   getRole(playerId: string): Role | undefined { return this.roleMap.get(playerId); }
   getAllRoles(): Map<string, Role> { return new Map(this.roleMap); }
   getRoomId(): string { return this.state.roomId; }
@@ -122,9 +135,13 @@ export class GameEngine {
     const { players, settings, phase } = this.state;
 
     if (phase !== 'lobby') {
-      if (!asSpectator && settings.allowSpectators) {
+      if (asSpectator) {
+        if (!settings.allowSpectators) {
+          return { success: false, error: 'Spectators not allowed in this room' };
+        }
+      } else if (settings.allowSpectators) {
         asSpectator = true;
-      } else if (!asSpectator) {
+      } else {
         return { success: false, error: 'Game already in progress' };
       }
     }
@@ -167,7 +184,26 @@ export class GameEngine {
   }
 
   removePlayer(id: string): void {
+    const leaving = this.state.players.find((p) => p.id === id);
+    const wasManager = leaving?.isRoomManager ?? false;
+
     this.updatePlayer(id, { isConnected: false, lastSeenAt: Date.now() });
+
+    if (wasManager && this.state.phase !== 'ended') {
+      const nextManager = this.state.players.find(
+        (p) => p.id !== id && p.isConnected && !p.isSpectator
+      );
+      if (nextManager) {
+        this.state = {
+          ...this.state,
+          players: this.state.players.map((p) => ({
+            ...p,
+            isRoomManager: p.id === nextManager.id,
+          })),
+        };
+      }
+    }
+
     this.emit('player_left', { playerId: id });
     this.notifyStateChange();
   }
@@ -447,6 +483,18 @@ export class GameEngine {
 
     if (content.length > 280) content = content.slice(0, 280);
 
+    if (type === 'chat' && !player.isSpectator) {
+      const now = Date.now();
+      const recent = (this.chatTimestamps.get(playerId) ?? []).filter(
+        (ts) => now - ts < GameEngine.CHAT_BURST_WINDOW_MS
+      );
+      if (recent.length >= GameEngine.CHAT_BURST_MAX) return null;
+      if (recent.length > 0 && now - recent[recent.length - 1]! < GameEngine.CHAT_MIN_INTERVAL_MS) {
+        return null;
+      }
+      this.chatTimestamps.set(playerId, [...recent, now]);
+    }
+
     const message: ChatMessage = {
       id: generateId('msg'),
       playerId,
@@ -458,7 +506,11 @@ export class GameEngine {
       round: this.state.round,
     };
 
-    this.state = { ...this.state, chat: [...this.state.chat, message] };
+    let chat = [...this.state.chat, message];
+    if (chat.length > GameEngine.MAX_CHAT) {
+      chat = chat.slice(chat.length - GameEngine.MAX_CHAT);
+    }
+    this.state = { ...this.state, chat };
     this.emit('message_sent', { message });
     // Do NOT call notifyStateChange here — SocketHandler broadcasts chat:message directly.
     // Emitting state:full for every chat message causes client to receive it before
@@ -477,15 +529,17 @@ export class GameEngine {
     if (!voter?.isAlive || voter.isSpectator) return { success: false, error: 'Cannot vote' };
     if (!target?.isAlive || target.isSpectator) return { success: false, error: 'Invalid target' };
     if (voterId === targetId) return { success: false, error: 'Cannot vote for yourself' };
+    if (this.state.votes[voterId]) return { success: false, error: 'Already voted this round' };
 
     this.state = { ...this.state, votes: { ...this.state.votes, [voterId]: targetId } };
     this.emit('vote_cast', { voterId, targetId });
-    this.notifyStateChange();
 
     const alivePlayers = this.state.players.filter((p) => p.isAlive && !p.isSpectator);
     if (Object.keys(this.state.votes).length >= alivePlayers.length) {
       this.clearPhaseTimer();
       this.transitionToVoteReveal();
+    } else {
+      // Vote tally only — avoid full state:full per vote (performance)
     }
 
     return { success: true };
@@ -513,6 +567,10 @@ export class GameEngine {
     }
     this.notifyStateChange();
   }
+  recordAdminAction(action: string, targetId?: string, data?: Record<string, unknown>): void {
+    this.emit('admin_action', { action, targetId, data });
+  }
+
   forcePhase(phase: GamePhase): void {
     if (phase === 'discussion') this.transitionToDiscussion();
     else if (phase === 'voting') this.transitionToVoting();
@@ -547,7 +605,11 @@ export class GameEngine {
       timestamp: Date.now(),
       round: this.state.round,
     };
-    this.state = { ...this.state, timeline: [...this.state.timeline, event] };
+    let timeline = [...this.state.timeline, event];
+    if (timeline.length > GameEngine.MAX_TIMELINE) {
+      timeline = timeline.slice(timeline.length - GameEngine.MAX_TIMELINE);
+    }
+    this.state = { ...this.state, timeline };
     this.onEvent?.(event);
   }
 

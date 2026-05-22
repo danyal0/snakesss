@@ -43,6 +43,7 @@ export class RoomManager {
   private aiProvider = this.buildProvider();
   private onRoomStateChange?: (roomId: string, state: GameState) => void;
   private onRoomPhaseEnd?: (roomId: string, phase: GamePhase) => void;
+  private onRoomBroadcast?: (roomId: string) => void;
 
   private buildProvider() {
     const xaiKey = process.env['XAI_API_KEY'];
@@ -58,6 +59,15 @@ export class RoomManager {
   onPhaseEnded(cb: (roomId: string, phase: GamePhase) => void): void {
     this.onRoomPhaseEnd = cb;
   }
+
+  setRoomBroadcast(cb: (roomId: string) => void): void {
+    this.onRoomBroadcast = cb;
+  }
+
+  broadcastRoom(roomId: string): void {
+    this.onRoomBroadcast?.(roomId);
+  }
+
 
   createRoom(
     managerId: string,
