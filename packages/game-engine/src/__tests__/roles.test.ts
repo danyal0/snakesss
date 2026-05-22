@@ -25,45 +25,42 @@ const settings: RoomSettings = {
 };
 
 describe('buildRolePool', () => {
-  it('returns correct count for 7 players with 2 snakes', () => {
+  it('returns correct count for 7 players per Big Potato table', () => {
     const pool = buildRolePool(settings, 7);
     expect(pool.length).toBe(7);
-    expect(pool.filter((r) => r === 'snake').length).toBe(2);
-    expect(pool.filter((r) => r === 'human').length).toBe(5);
+    // Big Potato 7-player: 3 snakes, 3 humans, 1 mongoose
+    expect(pool.filter((r) => r === 'snake').length).toBe(3);
+    expect(pool.filter((r) => r === 'mongoose').length).toBe(1);
+    expect(pool.filter((r) => r === 'human').length).toBe(3);
   });
 
-  it('clamps snakes when more snakes than players', () => {
-    const s: RoomSettings = {
-      ...settings,
-      roleDistribution: { snakes: 10, humans: 1, mongooses: 0 },
-    };
-    const pool = buildRolePool(s, 4);
+  it('returns correct distribution for 4 players (Big Potato default)', () => {
+    // 4-player: 2 snakes, 1 human, 1 mongoose
+    const pool = buildRolePool(settings, 4);
     expect(pool.length).toBe(4);
-    expect(pool.filter((r) => r === 'snake').length).toBeGreaterThanOrEqual(1);
-    expect(pool.filter((r) => r === 'human').length).toBeGreaterThanOrEqual(1);
+    expect(pool.filter((r) => r === 'snake').length).toBe(2);
+    expect(pool.filter((r) => r === 'human').length).toBe(1);
+    expect(pool.filter((r) => r === 'mongoose').length).toBe(1);
   });
 
-  it('includes seers when advancedRoles enabled', () => {
-    const s: RoomSettings = {
-      ...settings,
-      advancedRoles: true,
-      roleDistribution: { snakes: 2, humans: 4, mongooses: 1 },
-    };
+  it('includes mongoose when advancedRoles enabled', () => {
+    const s: RoomSettings = { ...settings, advancedRoles: true };
     const pool = buildRolePool(s, 7);
     expect(pool.filter((r) => r === 'mongoose').length).toBe(1);
   });
 });
 
 describe('assignRoles', () => {
-  it('assigns unique roles to each player', () => {
+  it('assigns unique roles to each player per Big Potato table', () => {
     const players = [
       makePlayer('p1'), makePlayer('p2'), makePlayer('p3'),
       makePlayer('p4'), makePlayer('p5'), makePlayer('p6'), makePlayer('p7'),
     ];
     const roles = assignRoles(players, settings);
     expect(roles.size).toBe(7);
+    // Big Potato 7-player: 3 snakes
     const snakes = Array.from(roles.values()).filter((r) => r.type === 'snake');
-    expect(snakes.length).toBe(2);
+    expect(snakes.length).toBe(3);
   });
 
   it('skips spectators in role assignment', () => {

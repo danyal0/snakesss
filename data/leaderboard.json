@@ -1,0 +1,46 @@
+{
+  "testalice": {
+    "username": "TestAlice",
+    "avatar": "🦊",
+    "totalScore": 0,
+    "gamesPlayed": 1,
+    "gamesWon": 0,
+    "bestGameScore": 0,
+    "snakeGames": 0,
+    "humanGames": 1,
+    "lastPlayed": 1779439358407
+  },
+  "testbob": {
+    "username": "TestBob",
+    "avatar": "🐺",
+    "totalScore": 2,
+    "gamesPlayed": 1,
+    "gamesWon": 1,
+    "bestGameScore": 2,
+    "snakeGames": 1,
+    "humanGames": 0,
+    "lastPlayed": 1779439358407
+  },
+  "testcarol": {
+    "username": "TestCarol",
+    "avatar": "🦅",
+    "totalScore": 0,
+    "gamesPlayed": 1,
+    "gamesWon": 0,
+    "bestGameScore": 0,
+    "snakeGames": 0,
+    "humanGames": 1,
+    "lastPlayed": 1779439358407
+  },
+  "testdave": {
+    "username": "TestDave",
+    "avatar": "🐻",
+    "totalScore": 2,
+    "gamesPlayed": 1,
+    "gamesWon": 1,
+    "bestGameScore": 2,
+    "snakeGames": 1,
+    "humanGames": 0,
+    "lastPlayed": 1779439358407
+  }
+}

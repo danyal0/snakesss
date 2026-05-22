@@ -8,6 +8,7 @@ import { AvatarPicker, AvatarDisplay } from '../components/ui/Avatar';
 import type { AvatarEmoji } from '@snakesss/shared-types';
 import { useSocket } from '../hooks/useSocket';
 import { useGameStore } from '../store/gameStore';
+import { LeaderboardWidget } from '../components/ui/LeaderboardWidget';
 
 export function HomeScreen() {
   const navigate = useNavigate();
@@ -142,6 +143,15 @@ export function HomeScreen() {
             >
               Browse Public Rooms
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={() => navigate('/leaderboard')}
+            >
+              🏆 Leaderboard
+            </Button>
+          <LeaderboardWidget />
           </motion.div>
         )}
 

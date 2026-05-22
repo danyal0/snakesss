@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { leaderboard } from './LeaderboardStore';
 import { RoomManager } from './RoomManager';
 import { requireAdmin, handleAdminLogin } from './auth';
 
@@ -75,6 +76,15 @@ export function createAdminRouter(roomManager: RoomManager): Router {
 
   router.get('/state', requireAdmin, (_req, res) => {
     res.json({ success: true, data: roomManager.getAdminState() });
+  });
+
+  router.get('/leaderboard', requireAdmin, (_req, res) => {
+    res.json({ success: true, data: leaderboard.getTop(50) });
+  });
+
+  router.delete('/leaderboard', requireAdmin, (_req, res) => {
+    leaderboard.clear();
+    res.json({ success: true });
   });
 
   return router;
