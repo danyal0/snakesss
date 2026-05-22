@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Snakesss",
+    "slug": "snakesss",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0f"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.snakesss.app",
+      "infoPlist": {
+        "UIStatusBarStyle": "UIStatusBarStyleLightContent",
+        "UIViewControllerBasedStatusBarAppearance": false
+      }
+    },
+    "android": {
+      "package": "com.snakesss.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a0f"
+      }
+    },
+    "scheme": "snakesss",
+    "plugins": [
+      "expo-router",
+      "expo-haptics"
+    ],
+    "extra": {
+      "serverUrl": "http://localhost:3001"
+    }
+  }
+}
