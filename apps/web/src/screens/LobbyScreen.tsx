@@ -420,6 +420,17 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 />
                 <div className="h-px bg-white/5" />
                 <SettingRow
+                  label="Snake Peek"
+                  value={settings.snakePeekTimer ?? settings.questionTimer}
+                  suffix="s"
+                  onChange={(v) =>
+                    setSettings({ ...settings, snakePeekTimer: v, questionTimer: v })
+                  }
+                  min={3} max={15} step={1}
+                  disabled={!isManager}
+                />
+                <div className="h-px bg-white/5" />
+                <SettingRow
                   label="Snakes"
                   value={settings.roleDistribution.snakes}
                   onChange={(v) =>

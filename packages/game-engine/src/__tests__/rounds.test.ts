@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { GameEngine } from '../GameEngine';
-import type { AvatarEmoji } from '@snakesss/shared-types';
+import type { AvatarEmoji, VoteChoice } from '@snakesss/shared-types';
 
 function createEngine() {
   return new GameEngine({
@@ -14,13 +14,26 @@ function createEngine() {
       botCount: 0,
       discussionTimer: 60,
       voteTimer: 30,
-      questionTimer: 30,
+      questionTimer: 5,
+      snakePeekTimer: 5,
       isPrivate: false,
       allowSpectators: true,
       advancedRoles: false,
       totalRounds: 6,
     },
   });
+}
+
+function voteForAll(engine: GameEngine, defaultChoice: VoteChoice = 0) {
+  engine.transitionToDiscussion();
+  engine.transitionToVoting();
+  const roles = engine.getAllRoles();
+  for (const pid of ['p1', 'p2', 'p3'] as const) {
+    const role = roles.get(pid);
+    const choice: VoteChoice = role?.type === 'snake' ? 'snake' : defaultChoice;
+    engine.submitAnswer(pid, choice);
+  }
+  engine.transitionToAnswerReveal();
 }
 
 describe('multi-round game flow', () => {
@@ -35,11 +48,8 @@ describe('multi-round game flow', () => {
 
   it('clears answers when starting round 2 question', async () => {
     await engine.transitionToQuestion();
-    engine.submitAnswer('p1', 0);
-    engine.submitAnswer('p2', 1);
-    engine.submitAnswer('p3', 2);
+    voteForAll(engine);
     expect(engine.getState().phase).toBe('answer_reveal');
-    expect(Object.keys(engine.getState().answers).length).toBeGreaterThan(0);
 
     engine.nextRound();
     await engine.transitionToQuestion();
@@ -53,16 +63,36 @@ describe('multi-round game flow', () => {
 
   it('allows all players to submit answers again in round 2', async () => {
     await engine.transitionToQuestion();
-    engine.submitAnswer('p1', 0);
-    engine.submitAnswer('p2', 1);
-    engine.submitAnswer('p3', 2);
+    voteForAll(engine);
 
     engine.nextRound();
     await engine.transitionToQuestion();
+    engine.transitionToDiscussion();
+    engine.transitionToVoting();
 
-    expect(engine.submitAnswer('p1', 1).success).toBe(true);
-    expect(engine.submitAnswer('p2', 2).success).toBe(true);
-    expect(engine.submitAnswer('p3', 0).success).toBe(true);
-    expect(Object.keys(engine.getState().answers)).toHaveLength(3);
+    const roles = engine.getAllRoles();
+    for (const pid of ['p1', 'p2', 'p3'] as const) {
+      const role = roles.get(pid);
+      const choice: VoteChoice = role?.type === 'snake' ? 'snake' : 1;
+      expect(engine.submitAnswer(pid, choice).success).toBe(true);
+    }
+    expect(engine.getAnswerMap().size).toBe(3);
+  });
+
+  it('rejects answers during discussion and enforces snake token rules', async () => {
+    await engine.transitionToQuestion();
+    engine.transitionToDiscussion();
+    expect(engine.submitAnswer('p1', 0).success).toBe(false);
+
+    engine.transitionToVoting();
+    const roles = engine.getAllRoles();
+    const snakeId = [...roles.entries()].find(([, r]) => r.type === 'snake')?.[0];
+    const humanId = [...roles.entries()].find(([, r]) => r.type === 'human')?.[0];
+    expect(snakeId).toBeTruthy();
+    expect(humanId).toBeTruthy();
+
+    expect(engine.submitAnswer(snakeId!, 0).success).toBe(false);
+    expect(engine.submitAnswer(snakeId!, 'snake').success).toBe(true);
+    expect(engine.submitAnswer(humanId!, 'snake').success).toBe(false);
   });
 });

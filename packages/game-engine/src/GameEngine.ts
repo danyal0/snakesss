@@ -12,6 +12,7 @@ import {
   AvatarEmoji,
   QuizQuestion,
   AnswerIndex,
+  VoteChoice,
   PlayerAnswer,
   RoundScore,
 } from '@snakesss/shared-types';
@@ -32,7 +33,7 @@ export interface CreateRoomOptions {
 export class GameEngine {
   private state: GameState;
   private roleMap: Map<string, Role> = new Map();
-  private answerMap: Map<string, AnswerIndex> = new Map(); // hidden until reveal
+  private answerMap: Map<string, VoteChoice> = new Map(); // hidden until reveal
   private usedQuestionTopics: string[] = [];
   private phaseTimer: ReturnType<typeof setTimeout> | null = null;
   private xaiApiKey?: string;
@@ -107,20 +108,20 @@ export class GameEngine {
 
   getPublicState(): GameState {
     const answeredIds =
-      this.state.phase === 'question' ? Array.from(this.answerMap.keys()) : undefined;
+      this.state.phase === 'voting' ? Array.from(this.answerMap.keys()) : undefined;
     return sanitizePublicState(this.getState(), answeredIds);
   }
 
   getSpectatorPublicState(): GameState {
     const answeredIds =
-      this.state.phase === 'question' ? Array.from(this.answerMap.keys()) : undefined;
+      this.state.phase === 'voting' ? Array.from(this.answerMap.keys()) : undefined;
     return sanitizeSpectatorState(this.getState(), answeredIds);
   }
 
   getRole(playerId: string): Role | undefined { return this.roleMap.get(playerId); }
   getAllRoles(): Map<string, Role> { return new Map(this.roleMap); }
   getRoomId(): string { return this.state.roomId; }
-  getAnswerMap(): Map<string, AnswerIndex> { return new Map(this.answerMap); }
+  getAnswerMap(): Map<string, VoteChoice> { return new Map(this.answerMap); }
 
   // ─── Player Management ────────────────────────────────────────────────────
 
@@ -272,7 +273,8 @@ export class GameEngine {
     this.usedQuestionTopics.push(question.text.split(' ').slice(0, 3).join(' '));
     this.answerMap.clear();
 
-    const endsAt = Date.now() + this.state.settings.questionTimer * 1000;
+    const peekMs = (this.state.settings.snakePeekTimer ?? this.state.settings.questionTimer) * 1000;
+    const endsAt = Date.now() + peekMs;
     this.state = {
       ...this.state,
       phase: 'question',
@@ -284,16 +286,29 @@ export class GameEngine {
 
     this.emit('question_shown', { questionId: question.id });
     this.notifyStateChange();
-    this.schedulePhaseEnd('question', this.state.settings.questionTimer * 1000);
+    this.schedulePhaseEnd('question', peekMs);
   }
 
-  submitAnswer(playerId: string, answerIndex: AnswerIndex): { success: boolean; allAnswered?: boolean } {
-    if (this.state.phase !== 'question') return { success: false };
+  submitAnswer(
+    playerId: string,
+    choice: VoteChoice
+  ): { success: boolean; allAnswered?: boolean; error?: string } {
+    if (this.state.phase !== 'voting') {
+      return { success: false, error: 'Voting is not open yet' };
+    }
     const player = this.state.players.find((p) => p.id === playerId);
-    if (!player?.isAlive || player.isSpectator) return { success: false };
-    if (this.answerMap.has(playerId)) return { success: false }; // already answered
+    if (!player?.isAlive || player.isSpectator) return { success: false, error: 'Cannot vote' };
+    if (this.answerMap.has(playerId)) return { success: false, error: 'Already voted' };
 
-    this.answerMap.set(playerId, answerIndex);
+    const role = this.roleMap.get(playerId);
+    if (!role) return { success: false, error: 'No role' };
+    if (role.type === 'snake') {
+      if (choice !== 'snake') return { success: false, error: 'Snakes must play the Snake token' };
+    } else if (choice === 'snake') {
+      return { success: false, error: 'Only snakes can play the Snake token' };
+    }
+
+    this.answerMap.set(playerId, choice);
     this.emit('answer_submitted', { playerId });
     this.notifyStateChange();
 
@@ -301,7 +316,7 @@ export class GameEngine {
     const allAnswered = this.answerMap.size >= alivePlayers.length;
     if (allAnswered) {
       this.clearPhaseTimer();
-      this.transitionToAnswerReveal();
+      this.onPhaseEnd?.('voting');
     }
 
     return { success: true, allAnswered };
@@ -315,17 +330,31 @@ export class GameEngine {
 
     // Build revealed answers
     const answersRevealed: PlayerAnswer[] = alivePlayers.map((player) => {
-      const answerIndex = this.answerMap.get(player.id) ?? 0;
+      const choice = this.answerMap.get(player.id);
+      const role = this.roleMap.get(player.id);
+      if (choice === 'snake' || role?.type === 'snake') {
+        return {
+          playerId: player.id,
+          playerName: player.username,
+          playerAvatar: player.avatar,
+          answerIndex: question.correctIndex,
+          isSnakeVote: true,
+          isCorrect: false,
+          role: role?.type,
+        };
+      }
+      const answerIndex = (choice ?? 0) as AnswerIndex;
       return {
         playerId: player.id,
         playerName: player.username,
         playerAvatar: player.avatar,
         answerIndex,
         isCorrect: answerIndex === question.correctIndex,
+        role: role?.type,
       };
     });
 
-    const revealedAnswers: Record<string, AnswerIndex> = {};
+    const revealedAnswers: Record<string, VoteChoice> = {};
     for (const [pid, idx] of this.answerMap.entries()) {
       revealedAnswers[pid] = idx;
     }
@@ -380,8 +409,16 @@ export class GameEngine {
   // ─── Voting Phase ─────────────────────────────────────────────────────────
 
   transitionToVoting(): void {
+    this.answerMap.clear();
     const endsAt = Date.now() + this.state.settings.voteTimer * 1000;
-    this.state = { ...this.state, phase: 'voting', votes: {}, phaseEndsAt: endsAt };
+    this.state = {
+      ...this.state,
+      phase: 'voting',
+      answers: {},
+      answersRevealed: [],
+      votes: {},
+      phaseEndsAt: endsAt,
+    };
     this.emit('phase_changed', { phase: 'voting', endsAt });
     this.notifyStateChange();
     this.schedulePhaseEnd('voting', this.state.settings.voteTimer * 1000);

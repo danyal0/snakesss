@@ -4,6 +4,7 @@ import type {
   ClientToServerEvents,
   ServerToClientEvents,
   AnswerIndex,
+  VoteChoice,
   WinCondition,
   Player,
   AvatarEmoji,
@@ -152,7 +153,13 @@ export function useSocketListeners(): void {
     socket.on('phase:changed', (phase, endsAt) => {
       const store = useGameStore.getState();
       store.patchGameState({ phase, phaseEndsAt: endsAt });
-      if (phase === 'voting') store.clearVoteState();
+      if (phase === 'voting') {
+        store.clearVoteState();
+        useGameStore.setState({ hasSubmittedAnswer: false, answerCount: 0 });
+      }
+      if (phase === 'question') {
+        useGameStore.setState({ hasSubmittedAnswer: false });
+      }
     });
 
     socket.on('player:joined', (player) => {
@@ -246,13 +253,15 @@ export function useSocket() {
 
   const kickPlayerFromRoom = (targetId: string) => { socket.emit('room:kick', targetId); };
 
-  const submitAnswer = (answerIndex: AnswerIndex) => {
-    socket.emit('quiz:submit_answer', { answerIndex });
+  const submitAnswer = (choice: VoteChoice) => {
+    const payload =
+      choice === 'snake' ? { snakeVote: true } : { answerIndex: choice as AnswerIndex };
+    socket.emit('quiz:submit_answer', payload);
     useGameStore.setState({ hasSubmittedAnswer: true });
     setTimeout(() => {
       const st = useGameStore.getState();
       if (
-        st.gameState?.phase === 'question' &&
+        st.gameState?.phase === 'voting' &&
         st.playerId &&
         !(st.playerId in st.gameState.answers)
       ) {
