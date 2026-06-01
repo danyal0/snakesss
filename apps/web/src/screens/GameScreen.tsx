@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
-import type { GameState, Player } from '@snakesss/shared-types';
+import type { GameState, Player, VoteChoice } from '@snakesss/shared-types';
 import { ChatPanel } from '../components/game/ChatPanel';
-import { VotingPanel } from '../components/game/VotingPanel';
 import { RoleReveal } from '../components/game/RoleReveal';
 import { EliminationReveal } from '../components/game/EliminationReveal';
 import { CardDeal } from '../components/game/CardDeal';
 import { GameEndScreen } from '../components/game/GameEndScreen';
-import { QuizPhase } from '../components/game/QuizPhase';
+import { QuestionOptions } from '../components/game/QuestionOptions';
+import { AnswerVotePanel } from '../components/game/AnswerVotePanel';
+import { useSwipeTabs } from '../hooks/useSwipeTabs';
 import { AnswerReveal } from '../components/game/AnswerReveal';
 import { Timer } from '../components/ui/Timer';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -17,7 +18,6 @@ import { useSocket } from '../hooks/useSocket';
 import {
   useGameStore,
   selectAlivePlayers,
-  selectCanVote,
   selectHasVoted,
 } from '../store/gameStore';
 import { useNavigate } from 'react-router-dom';
@@ -38,8 +38,9 @@ export function GameScreen({ gameState }: GameScreenProps) {
   const playerId = store.playerId;
   const myRole = store.myRole;
   const typingIndicators = store.typingIndicators;
-  const canVote = selectCanVote(store);
   const hasVoted = selectHasVoted(store);
+  const gamePanels = ['players', 'chat', 'vote'] as const;
+  const gameSwipe = useSwipeTabs(gamePanels, activePanel, setActivePanel);
   const alivePlayers = selectAlivePlayers(store);
 
   const me = playerId ? gameState.players.find((p) => p.id === playerId) : undefined;
@@ -80,9 +81,9 @@ export function GameScreen({ gameState }: GameScreenProps) {
   // Auto-switch tabs by phase
   useEffect(() => {
     if (gameState.phase === 'question') setActivePanel('players');
-    else if (gameState.phase === 'answer_reveal') setActivePanel('players');
-    else if (gameState.phase === 'voting' || gameState.phase === 'vote_reveal') setActivePanel('vote');
     else if (gameState.phase === 'discussion') setActivePanel('chat');
+    else if (gameState.phase === 'voting') setActivePanel('vote');
+    else if (gameState.phase === 'answer_reveal') setActivePanel('players');
   }, [gameState.phase]);
 
   const handleVote = useCallback((targetId: string) => castVote(targetId), [castVote]);
@@ -91,9 +92,15 @@ export function GameScreen({ gameState }: GameScreenProps) {
       sendMessage(content, type),
     [sendMessage]
   );
-  const handleAnswer = useCallback((idx: import('@snakesss/shared-types').AnswerIndex) => {
-    submitAnswer(idx);
-  }, [submitAnswer]);
+  const handleVoteChoice = useCallback(
+    (choice: VoteChoice) => submitAnswer(choice),
+    [submitAnswer]
+  );
+
+  const submittedChoice: VoteChoice | null =
+    playerId && gameState.answers[playerId] !== undefined
+      ? gameState.answers[playerId]!
+      : null;
 
   // Game over
   if (gameState.phase === 'ended') {
@@ -111,10 +118,10 @@ export function GameScreen({ gameState }: GameScreenProps) {
   const phaseInfo: Record<string, { label: string; color: string; dot: string }> = {
     lobby: { label: 'Lobby', color: 'bg-white/15 text-white/70', dot: 'bg-white/30' },
     dealing: { label: 'Dealing Cards', color: 'bg-purple-500/20 text-purple-300', dot: 'bg-purple-400 animate-pulse' },
-    question: { label: 'Answer the Question', color: 'bg-blue-500/20 text-blue-300', dot: 'bg-blue-400 animate-pulse' },
-    answer_reveal: { label: 'Answers Revealed', color: 'bg-orange-500/20 text-orange-300', dot: 'bg-orange-400' },
-    discussion: { label: 'Discussion', color: 'bg-green-500/20 text-green-300', dot: 'bg-green-400 animate-pulse' },
-    voting: { label: 'Voting', color: 'bg-yellow-500/20 text-yellow-300', dot: 'bg-yellow-400 animate-pulse' },
+    question: { label: 'Snakes Peek', color: 'bg-blue-500/20 text-blue-300', dot: 'bg-blue-400 animate-pulse' },
+    answer_reveal: { label: 'Reveal & Score', color: 'bg-orange-500/20 text-orange-300', dot: 'bg-orange-400' },
+    discussion: { label: 'Debate', color: 'bg-green-500/20 text-green-300', dot: 'bg-green-400 animate-pulse' },
+    voting: { label: 'Lock Your Vote', color: 'bg-yellow-500/20 text-yellow-300', dot: 'bg-yellow-400 animate-pulse' },
     vote_reveal: { label: 'Vote Results', color: 'bg-orange-500/20 text-orange-300', dot: 'bg-orange-400' },
     elimination: { label: 'Elimination', color: 'bg-red-500/20 text-red-300', dot: 'bg-red-400 animate-pulse' },
     scores: { label: 'Round Scores', color: 'bg-teal-500/20 text-teal-300', dot: 'bg-teal-400' },
@@ -126,7 +133,10 @@ export function GameScreen({ gameState }: GameScreenProps) {
   const voteCounts = store.voteTally;
 
   // Is this a full-screen phase?
-  const isQuizPhase = gameState.phase === 'question' || gameState.phase === 'answer_reveal';
+  const isFullScreenPhase =
+    gameState.phase === 'question' ||
+    gameState.phase === 'voting' ||
+    gameState.phase === 'answer_reveal';
 
   return (
     <div className="h-full app-bg flex flex-col overflow-hidden">
@@ -206,7 +216,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                   )}
 
                   {/* Answered checkmark */}
-                  {gameState.phase === 'question' && gameState.answeredPlayerIds?.includes(player.id) && (
+                  {gameState.phase === 'voting' && gameState.answeredPlayerIds?.includes(player.id) && (
                     <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow">
                       ✓
                     </div>
@@ -227,32 +237,49 @@ export function GameScreen({ gameState }: GameScreenProps) {
       <div className="flex-1 min-h-0 px-3 pb-3">
         <GlassCard className="h-full flex flex-col overflow-hidden p-0">
 
-          {/* Quiz phase — full card */}
           {gameState.phase === 'question' && gameState.currentQuestion && (
-            <QuizPhase
+            <QuestionOptions
               question={gameState.currentQuestion}
-              snakeAnswer={store.snakeAnswer}
+              mode="peek"
               isSnake={isSnake}
+              snakeAnswer={store.snakeAnswer}
               phaseEndsAt={gameState.phaseEndsAt}
-              hasSubmitted={store.hasSubmittedAnswer}
-              submittedAnswer={
-                playerId && gameState.answers[playerId] !== undefined
-                  ? gameState.answers[playerId]!
-                  : null
-              }
-              answeredCount={store.answerCount}
-              totalCount={store.answerTotal || alivePlayers.length}
-              onSubmit={handleAnswer}
+              timerLabel="Peek"
             />
           )}
 
-          {/* Answer reveal phase */}
+          {gameState.phase === 'voting' && gameState.currentQuestion && (
+            <AnswerVotePanel
+              question={gameState.currentQuestion}
+              isSnake={isSnake}
+              snakeAnswer={store.snakeAnswer}
+              phaseEndsAt={gameState.phaseEndsAt}
+              hasSubmitted={store.hasSubmittedAnswer}
+              submittedChoice={submittedChoice}
+              votedCount={store.answerCount}
+              totalCount={store.answerTotal || alivePlayers.length}
+              onSubmit={handleVoteChoice}
+            />
+          )}
+
           {gameState.phase === 'answer_reveal' && (
             <AnswerReveal
               question={gameState.currentQuestion}
-              answers={gameState.answersRevealed}
-              correctIndex={store.quizRevealCorrectIndex}
-              scores={store.quizRevealScores}
+              answers={
+                gameState.answersRevealed.length > 0
+                  ? gameState.answersRevealed
+                  : store.quizRevealAnswers
+              }
+              correctIndex={
+                store.quizRevealCorrectIndex ??
+                gameState.currentQuestion?.correctIndex ??
+                null
+              }
+              scores={
+                store.quizRevealScores.length > 0
+                  ? store.quizRevealScores
+                  : gameState.roundScores[gameState.round] ?? []
+              }
               myPlayerId={playerId}
             />
           )}
@@ -267,9 +294,8 @@ export function GameScreen({ gameState }: GameScreenProps) {
           )}
 
           {/* Standard tabbed phases */}
-          {!isQuizPhase && gameState.phase !== 'scores' && (
-            <>
-              {/* Tab bar */}
+          {!isFullScreenPhase && gameState.phase !== 'scores' && (
+            <div className="flex flex-col flex-1 min-h-0" onTouchStart={gameSwipe.onTouchStart} onTouchEnd={gameSwipe.onTouchEnd}>
               <div className="flex border-b border-white/8 flex-shrink-0">
                 {(['players', 'chat', 'vote'] as ActivePanel[]).map((panel) => (
                   <button
@@ -306,14 +332,19 @@ export function GameScreen({ gameState }: GameScreenProps) {
               {/* Panel content */}
               <div className="flex-1 min-h-0">
                 <AnimatePresence mode="wait">
-                  {activePanel === 'players' && (
+                  {activePanel === 'players' && gameState.phase === 'discussion' && gameState.currentQuestion && (
+                    <motion.div key="debate-options" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full min-h-0">
+                      <QuestionOptions question={gameState.currentQuestion} mode="discussion" phaseEndsAt={gameState.phaseEndsAt} timerLabel="Debate" />
+                    </motion.div>
+                  )}
+                  {activePanel === 'players' && gameState.phase !== 'discussion' && (
                     <motion.div key="players" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full overflow-y-auto scrollbar-none p-3">
                       <PlayerGrid
                         players={gameState.players.filter((p) => !p.isSpectator)}
                         myPlayerId={playerId}
                         myRoleType={myRole?.type}
                         voteCounts={voteCounts}
-                        canVote={canVote && !hasVoted}
+                        canVote={false}
                         onVote={handleVote}
                         gameEnded={(gameState.phase as string) === 'ended'}
                         showAnswers={gameState.phase === 'answer_reveal'}
@@ -344,16 +375,6 @@ export function GameScreen({ gameState }: GameScreenProps) {
                           gameState={gameState}
                           votes={voteCounts}
                         />
-                      ) : (gameState.phase === 'voting' || gameState.phase === 'vote_reveal') ? (
-                        <VotingPanel
-                          gameState={gameState}
-                          myPlayerId={playerId}
-                          canVote={canVote}
-                          hasVoted={hasVoted}
-                          voteTally={store.voteTally}
-                          myVoteTarget={store.myVoteTarget}
-                          onVote={handleVote}
-                        />
                       ) : (
                         <EmptyVote roundHistory={gameState.roundHistory} />
                       )}
@@ -361,7 +382,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                   )}
                 </AnimatePresence>
               </div>
-            </>
+            </div>
           )}
         </GlassCard>
       </div>
@@ -605,7 +626,7 @@ function EmptyVote({ roundHistory }: { roundHistory: import('@snakesss/shared-ty
   return (
     <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
       <div className="text-5xl opacity-40">🗳️</div>
-      <p className="text-white/50 text-sm">Voting happens after discussion</p>
+      <p className="text-white/50 text-sm">Answer voting opens after the debate timer</p>
       {roundHistory.length > 0 && (
         <div className="w-full mt-2 space-y-1.5">
           <p className="text-[10px] text-white/30 uppercase tracking-wider">History</p>

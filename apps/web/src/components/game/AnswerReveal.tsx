@@ -118,7 +118,7 @@ export function AnswerReveal({
               Everyone's answers
             </p>
             {answers.map((answer, i) => {
-              const isCorrect = answer.isCorrect;
+              const isCorrect = answer.isCorrect && !answer.isSnakeVote;
               return (
                 <motion.div
                   key={answer.playerId}
@@ -127,9 +127,11 @@ export function AnswerReveal({
                   transition={{ delay: i * 0.08 }}
                   className={clsx(
                     'flex items-center gap-3 p-3 rounded-2xl',
-                    isCorrect
-                      ? 'bg-green-500/10 border border-green-500/20'
-                      : 'glass border border-white/8'
+                    answer.isSnakeVote
+                      ? 'bg-red-500/10 border border-red-500/20'
+                      : isCorrect
+                        ? 'bg-green-500/10 border border-green-500/20'
+                        : 'glass border border-white/8'
                   )}
                 >
                   <span className="text-xl flex-shrink-0">{answer.playerAvatar}</span>
@@ -141,21 +143,24 @@ export function AnswerReveal({
                       {answer.playerId === myPlayerId && (
                         <span className="text-[9px] text-white/40">(you)</span>
                       )}
-
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <div
                       className={clsx(
                         'w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm',
-                        isCorrect
-                          ? 'bg-green-500/25 text-green-300'
-                          : 'bg-orange-500/20 text-orange-300'
+                        answer.isSnakeVote
+                          ? 'bg-red-500/25 text-red-300'
+                          : isCorrect
+                            ? 'bg-green-500/25 text-green-300'
+                            : 'bg-orange-500/20 text-orange-300'
                       )}
                     >
-                      {OPTION_LABELS[answer.answerIndex]}
+                      {answer.isSnakeVote ? '🐍' : OPTION_LABELS[answer.answerIndex]}
                     </div>
-                    <span className="text-base">{isCorrect ? '✓' : '✗'}</span>
+                    {!answer.isSnakeVote && (
+                      <span className="text-base">{isCorrect ? '✓' : '✗'}</span>
+                    )}
                   </div>
                 </motion.div>
               );

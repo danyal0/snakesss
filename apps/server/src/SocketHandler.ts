@@ -255,8 +255,21 @@ export function registerSocketHandlers(
       const engine = roomManager.getEngine(meta.roomId);
       if (!engine) return;
 
-      const result = engine.submitAnswer(meta.playerId, payload.answerIndex as AnswerIndex);
-      if (!result.success) return;
+      let choice: import('@snakesss/shared-types').VoteChoice;
+      if (payload.snakeVote) {
+        choice = 'snake';
+      } else if (payload.answerIndex !== undefined) {
+        choice = payload.answerIndex as AnswerIndex;
+      } else {
+        socket.emit('error', 'Invalid vote');
+        return;
+      }
+
+      const result = engine.submitAnswer(meta.playerId, choice);
+      if (!result.success) {
+        if (result.error) socket.emit('error', result.error);
+        return;
+      }
 
       // Broadcast answer count (not the answer itself) so others see progress
       const state = engine.getState();
@@ -408,7 +421,6 @@ async function handlePhaseTransition(
   switch (endedPhase) {
     case 'dealing': {
       await engine.transitionToQuestion();
-      void scheduleBotAnswers(roomId, io, roomManager);
       // Tell each snake the correct answer privately
       const newState = engine.getState();
       if (newState.currentQuestion) {
@@ -434,32 +446,6 @@ async function handlePhaseTransition(
     }
 
     case 'question': {
-      const currentState = engine.getState();
-      const alivePlayers = currentState.players.filter((p) => p.isAlive && !p.isSpectator);
-      const answerMap = engine.getAnswerMap();
-      for (const player of alivePlayers) {
-        if (!answerMap.has(player.id) && player.isBot) {
-          const randomAnswer = Math.floor(Math.random() * 3) as AnswerIndex;
-          engine.submitAnswer(player.id, randomAnswer);
-        }
-      }
-      // submitAnswer triggers transitionToAnswerReveal when all answered
-      // If not triggered yet:
-      const afterState = engine.getState();
-      if (afterState.phase === 'question') engine.transitionToAnswerReveal();
-      break;
-    }
-
-    case 'answer_reveal': {
-      // Broadcast full reveal to all clients
-      const revealState = engine.getState();
-      if (revealState.currentQuestion) {
-        io.to(`room:${roomId}`).emit('quiz:reveal',
-          stripAnswerRoles(revealState.answersRevealed),
-          revealState.currentQuestion.correctIndex,
-          revealState.roundScores[revealState.round] ?? []
-        );
-      }
       engine.transitionToDiscussion();
       void scheduleBotChat(roomId, io, roomManager);
       break;
@@ -467,12 +453,28 @@ async function handlePhaseTransition(
 
     case 'discussion': {
       engine.transitionToVoting();
-      void scheduleBotVotes(roomId, io, roomManager);
+      void scheduleBotAnswers(roomId, io, roomManager);
       break;
     }
 
     case 'voting': {
-      engine.transitionToVoteReveal();
+      const before = engine.getState();
+      if (before.phase === 'voting') {
+        engine.transitionToAnswerReveal();
+      }
+      const revealState = engine.getState();
+      if (revealState.phase === 'answer_reveal' && revealState.currentQuestion) {
+        io.to(`room:${roomId}`).emit('quiz:reveal',
+          stripAnswerRoles(revealState.answersRevealed),
+          revealState.currentQuestion.correctIndex,
+          revealState.roundScores[revealState.round] ?? []
+        );
+      }
+      break;
+    }
+
+    case 'answer_reveal': {
+      engine.transitionToScores();
       break;
     }
 
@@ -511,7 +513,6 @@ async function handlePhaseTransition(
       } else {
         engine.nextRound();
         await engine.transitionToQuestion();
-        void scheduleBotAnswers(roomId, io, roomManager);
         // Notify snakes of new correct answer
         const nextState = engine.getState();
         if (nextState.currentQuestion) {
@@ -564,27 +565,26 @@ async function scheduleBotAnswers(
 
   for (const bot of bots) {
     const role = engine.getRole(bot.id);
-    const delay = 1500 + Math.random() * Math.min(state.settings.questionTimer * 600, 15000);
+    const delay = 1500 + Math.random() * Math.min(state.settings.voteTimer * 800, 12000);
 
     scheduleRoomBotTimeout(roomId, () => {
       const currentState = engine.getState();
-      if (currentState.isPaused || currentState.phase !== 'question') return;
+      if (currentState.isPaused || currentState.phase !== 'voting') return;
 
-      let answer: AnswerIndex;
+      let choice: import('@snakesss/shared-types').VoteChoice;
       if (role?.type === 'snake') {
-        const wrongAnswers = ([0, 1, 2] as AnswerIndex[]).filter((i) => i !== question.correctIndex);
-        answer = wrongAnswers[Math.floor(Math.random() * wrongAnswers.length)]!;
+        choice = 'snake';
       } else {
         const isCorrect = Math.random() < 0.65;
         if (isCorrect) {
-          answer = question.correctIndex;
+          choice = question.correctIndex;
         } else {
           const wrongAnswers = ([0, 1, 2] as AnswerIndex[]).filter((i) => i !== question.correctIndex);
-          answer = wrongAnswers[Math.floor(Math.random() * wrongAnswers.length)]!;
+          choice = wrongAnswers[Math.floor(Math.random() * wrongAnswers.length)]!;
         }
       }
 
-      const result = engine.submitAnswer(bot.id, answer);
+      const result = engine.submitAnswer(bot.id, choice);
       if (result.success) {
         const total = engine.getState().players.filter((p) => p.isAlive && !p.isSpectator).length;
         io.to(`room:${roomId}`).emit('quiz:answer_update', engine.getAnswerMap().size, total);

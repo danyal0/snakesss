@@ -25,11 +25,15 @@ export interface QuizQuestion {
 
 export type AnswerIndex = 0 | 1 | 2;
 
+/** A/B/C for humans & mongoose, or Snake token for snakes. */
+export type VoteChoice = AnswerIndex | 'snake';
+
 export interface PlayerAnswer {
   playerId: string;
   playerName: string;
   playerAvatar: AvatarEmoji;
   answerIndex: AnswerIndex;
+  isSnakeVote?: boolean;
   isCorrect: boolean;
   role?: RoleType;
 }
@@ -79,10 +83,10 @@ export interface BotMemory {
 export type GamePhase =
   | 'lobby'
   | 'dealing'
-  | 'question'        // NEW: question shown, players pick A/B/C
-  | 'answer_reveal'   // NEW: all answers shown publicly
+  | 'question'
   | 'discussion'
   | 'voting'
+  | 'answer_reveal'
   | 'vote_reveal'
   | 'elimination'
   | 'scores'          // NEW: round scores shown
@@ -143,8 +147,9 @@ export interface RoomSettings {
   botCount: number;
   discussionTimer: number;
   voteTimer: number;
-  questionTimer: number;  // seconds for answer phase
-  totalRounds: number;    // default 6
+  questionTimer: number;
+  snakePeekTimer: number;
+  totalRounds: number;
   roleDistribution: RoleDistribution;
   isPrivate: boolean;
   allowSpectators: boolean;
@@ -179,7 +184,8 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   botCount: 0,
   discussionTimer: 120,
   voteTimer: 30,
-  questionTimer: 30,
+  questionTimer: 5,
+  snakePeekTimer: 5,
   totalRounds: 6,
   roleDistribution: { snakes: 2, humans: 1, mongooses: 1 }, // 4-player default
   isPrivate: false,
@@ -225,8 +231,8 @@ export interface GameState {
   players: Player[];
   // Quiz
   currentQuestion: QuizQuestion | null;
-  answers: Record<string, AnswerIndex>
-  answeredPlayerIds?: string[];          // playerId → answerIndex (hidden during question)
+  answers: Record<string, VoteChoice>;
+  answeredPlayerIds?: string[];
   answersRevealed: PlayerAnswer[];               // shown after reveal
   roundScores: Record<number, RoundScore[]>;     // round → scores
   // Elimination
@@ -272,7 +278,8 @@ export interface CastVotePayload {
 }
 
 export interface SubmitAnswerPayload {
-  answerIndex: AnswerIndex;
+  answerIndex?: AnswerIndex;
+  snakeVote?: boolean;
 }
 
 export interface UpdateSettingsPayload {

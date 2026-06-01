@@ -27,7 +27,10 @@ export function sanitizePublicState(
   state: GameState,
   answeredPlayerIds?: string[]
 ): GameState {
-  const hideAnswers = state.phase === 'question';
+  const hideAnswers =
+    state.phase === 'question' ||
+    state.phase === 'discussion' ||
+    state.phase === 'voting';
   const hideVotes =
     state.phase === 'voting' ||
     state.phase === 'discussion' ||

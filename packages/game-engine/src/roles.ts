@@ -4,6 +4,7 @@ import {
   RoleDistribution,
   Player,
   RoomSettings,
+  VoteChoice,
   getOptimalRoleDistribution,
 } from '@snakesss/shared-types';
 import { shuffleArray } from './utils';
@@ -80,7 +81,7 @@ export function revealRole(role: Role): Role {
 }
 
 export function calculateRoundScores(
-  answers: Map<string, number>,
+  answers: Map<string, VoteChoice>,
   correctIndex: number,
   roles: Map<string, Role>,
   players: Player[]
@@ -89,29 +90,33 @@ export function calculateRoundScores(
 
   const activePlayers = players.filter((p) => !p.isSpectator && p.isAlive);
 
-  // Count correct answers among humans/mongooses
   const correctHumans = activePlayers.filter((p) => {
     const role = roles.get(p.id);
     if (!role || role.type === 'snake') return false;
-    return answers.get(p.id) === correctIndex;
+    const choice = answers.get(p.id);
+    return choice !== 'snake' && choice === correctIndex;
   });
 
   const incorrectCount = activePlayers.filter((p) => {
     const role = roles.get(p.id);
     if (!role || role.type === 'snake') return false;
-    return answers.get(p.id) !== correctIndex;
+    const choice = answers.get(p.id);
+    if (choice === 'snake' || choice === undefined) return false;
+    return choice !== correctIndex;
   }).length;
 
   activePlayers.forEach((player) => {
     const role = roles.get(player.id);
-    if (!role) { scoreDeltas.set(player.id, 0); return; }
+    if (!role) {
+      scoreDeltas.set(player.id, 0);
+      return;
+    }
 
     if (role.type === 'snake') {
-      // Snake scores 1 point per human who got it wrong
       scoreDeltas.set(player.id, incorrectCount);
     } else {
-      // Human/mongoose scores 1 per correct answer if they got it right
-      const theyGotItRight = answers.get(player.id) === correctIndex;
+      const choice = answers.get(player.id);
+      const theyGotItRight = choice !== 'snake' && choice === correctIndex;
       scoreDeltas.set(player.id, theyGotItRight ? correctHumans.length : 0);
     }
   });
