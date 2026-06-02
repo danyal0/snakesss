@@ -10,6 +10,7 @@ import { GameEndScreen } from '../components/game/GameEndScreen';
 import { QuestionOptions } from '../components/game/QuestionOptions';
 import { AnswerVotePanel } from '../components/game/AnswerVotePanel';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
+import { SwipeCarousel } from '../components/ui/SwipeCarousel';
 import { GAME_PANELS, defaultPanelForPhase, type GamePanel } from '../utils/gamePanels';
 import { AnswerReveal } from '../components/game/AnswerReveal';
 import { Timer } from '../components/ui/Timer';
@@ -45,6 +46,8 @@ export function GameScreen({ gameState }: GameScreenProps) {
   const {
     resetDrag: resetGameSwipe,
     activeIndex: gameActiveIndex,
+    dragOffset: gameDragOffset,
+    isDragging: gameIsDragging,
     ...gameSwipeHandlers
   } = useSwipeTabs(GAME_PANELS, activePanel, setActivePanel);
   const alivePlayers = selectAlivePlayers(store);
@@ -144,7 +147,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
     gameState.phase === 'answer_reveal';
 
   return (
-    <div data-testid="game-screen" className="h-full app-bg flex flex-col overflow-hidden">
+    <div data-testid="game-screen" className="h-full app-bg flex flex-col min-h-0">
 
       {/* ── Overlays ─────────────────────────── */}
       {gameState.phase === 'dealing' && (
@@ -160,8 +163,8 @@ export function GameScreen({ gameState }: GameScreenProps) {
         show={store.showEliminationReveal}
       />
 
-      {/* ── Top bar ──────────────────────────── */}
-      <div className="flex-shrink-0 px-4 pt-3 pb-1.5">
+      {/* ── Top bar (overflow visible so avatar rings/badges are not clipped) ── */}
+      <div className="flex-shrink-0 z-10 px-4 pt-3 pb-2 overflow-visible">
         {/* Phase row */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <div data-testid="phase-badge" className={clsx('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold', phase.color)}>
@@ -189,8 +192,11 @@ export function GameScreen({ gameState }: GameScreenProps) {
           </div>
         </div>
 
-        {/* Avatar strip — spacious, horizontal scroll */}
-        <div className="flex gap-3 overflow-x-auto scrollbar-none pb-2 px-0.5">
+        {/* Avatar strip — pt for ring/badge overflow; scroll clips x only via padding */}
+        <div
+          data-testid="game-avatar-strip"
+          className="flex gap-3 overflow-x-auto overflow-y-visible scrollbar-none pt-2 pb-1 px-1"
+        >
           {gameState.players.filter((p) => !p.isSpectator).map((player) => {
             const votes = voteCounts[player.id] ?? 0;
             const isEliminated = !player.isAlive;
@@ -207,15 +213,15 @@ export function GameScreen({ gameState }: GameScreenProps) {
                   <div className={clsx(
                     'w-11 h-11 rounded-full flex items-center justify-center text-2xl glass-elevated',
                     isEliminated && 'grayscale',
-                    player.id === playerId && 'ring-2 ring-green-400/60 ring-offset-1 ring-offset-transparent',
-                    votes > 0 && !isEliminated && 'ring-2 ring-red-400/70 ring-offset-1 ring-offset-transparent'
+                    player.id === playerId && 'ring-2 ring-green-400/70',
+                    votes > 0 && !isEliminated && 'ring-2 ring-red-400/80'
                   )}>
                     {isEliminated ? '💀' : player.avatar}
                   </div>
 
                   {/* Vote count badge */}
                   {votes > 0 && !isEliminated && (
-                    <div className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white px-1 shadow-lg">
+                    <div className="absolute top-0 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white px-1 shadow-lg">
                       {votes}
                     </div>
                   )}
@@ -239,7 +245,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
       </div>
 
       {/* ── Main content ─────────────────────── */}
-      <div className="flex-1 min-h-0 px-3 pb-3">
+      <div className="flex-1 min-h-0 overflow-hidden px-3 pb-3">
         <GlassCard className="h-full flex flex-col overflow-hidden p-0">
 
           {gameState.phase === 'question' && gameState.currentQuestion && (
@@ -335,20 +341,29 @@ export function GameScreen({ gameState }: GameScreenProps) {
                 ))}
               </div>
 
-              {/* One visible panel per tab — avoids transform/carousel desync */}
+              {/* Swipe carousel — correct % transform + live drag preview */}
               <div
                 key={phaseRoundKey}
-                data-testid="game-tab-panels"
                 className="flex-1 min-h-0 flex flex-col"
                 data-active-panel={activePanel}
                 data-carousel-index={gameActiveIndex}
-                onTouchStart={gameSwipeHandlers.onTouchStart}
-                onTouchMove={gameSwipeHandlers.onTouchMove}
-                onTouchEnd={gameSwipeHandlers.onTouchEnd}
-                onTouchCancel={gameSwipeHandlers.onTouchCancel}
               >
-                {activePanel === 'players' && (
-                  <div data-testid="game-panel-players" data-panel-visible="true" className="h-full min-h-0">
+                <SwipeCarousel
+                  testId="game-carousel"
+                  activeIndex={gameActiveIndex}
+                  slideCount={GAME_PANELS.length}
+                  dragOffset={gameDragOffset}
+                  isDragging={gameIsDragging}
+                  onTouchStart={gameSwipeHandlers.onTouchStart}
+                  onTouchMove={gameSwipeHandlers.onTouchMove}
+                  onTouchEnd={gameSwipeHandlers.onTouchEnd}
+                  onTouchCancel={gameSwipeHandlers.onTouchCancel}
+                >
+                  <div
+                    data-testid="game-panel-players"
+                    data-panel-visible={activePanel === 'players'}
+                    className="h-full min-h-0"
+                  >
                     {gameState.phase === 'discussion' && gameState.currentQuestion ? (
                       <QuestionOptions question={gameState.currentQuestion} mode="discussion" phaseEndsAt={gameState.phaseEndsAt} timerLabel="Debate" />
                     ) : (
@@ -368,10 +383,12 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       </div>
                     )}
                   </div>
-                )}
 
-                {activePanel === 'chat' && (
-                  <div data-testid="game-panel-chat" data-panel-visible="true" className="h-full min-h-0">
+                  <div
+                    data-testid="game-panel-chat"
+                    data-panel-visible={activePanel === 'chat'}
+                    className="h-full min-h-0"
+                  >
                     <ChatPanel
                       messages={gameState.chat}
                       typingIndicators={typingIndicators}
@@ -381,10 +398,12 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       onTyping={sendTyping}
                     />
                   </div>
-                )}
 
-                {activePanel === 'vote' && (
-                  <div data-testid="game-panel-vote" data-panel-visible="true" className="h-full min-h-0">
+                  <div
+                    data-testid="game-panel-vote"
+                    data-panel-visible={activePanel === 'vote'}
+                    className="h-full min-h-0"
+                  >
                     {!isAlive && !isSpectator ? (
                       <EliminatedSpectatorView
                         gameState={gameState}
@@ -394,7 +413,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       <EmptyVote roundHistory={gameState.roundHistory} />
                     )}
                   </div>
-                )}
+                </SwipeCarousel>
               </div>
             </div>
           )}

@@ -23,6 +23,22 @@ test.describe('Game tab ↔ panel sync', () => {
     await expect(page.locator('[data-active-panel="chat"]')).toBeVisible();
   });
 
+  test('avatar strip does not clip player highlight ring', async ({ page }) => {
+    const clip = await page.evaluate(() => {
+      const strip = document.querySelector('[data-testid="game-avatar-strip"]');
+      const ring = strip?.querySelector('[class*="ring-green"]');
+      if (!strip || !ring) return { ok: false, reason: 'missing nodes' };
+      const stripRect = strip.getBoundingClientRect();
+      const ringRect = ring.getBoundingClientRect();
+      return {
+        ok: ringRect.top >= stripRect.top - 2,
+        stripTop: stripRect.top,
+        ringTop: ringRect.top,
+      };
+    });
+    expect(clip.ok, `avatar ring clipped: ${JSON.stringify(clip)}`).toBe(true);
+  });
+
   test('discussion: chat input visible before any messages', async ({ page }) => {
     await expectGameTabMatchesPanel(page, 'chat');
     await expect(page.getByTestId('chat-empty-state')).toBeVisible();
@@ -126,7 +142,7 @@ test.describe('Game swipe on touch devices', () => {
 
   test('swipe from chat to vote shows vote panel', async ({ page }) => {
     await expectGameTabMatchesPanel(page, 'chat');
-    await swipeHorizontal(page, page.getByTestId('game-tab-panels'), 'left');
+    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left');
     await expectGameTabMatchesPanel(page, 'vote');
   });
 });

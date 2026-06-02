@@ -15,7 +15,7 @@ export async function auditDomInteractions(page: Page): Promise<DomAuditResult> 
     const visibleWithoutHandlers: string[] = [];
 
     for (const entry of map) {
-      if (!entry.visible && entry.hasClick) {
+      if (!entry.visible && entry.hasClick && !entry.inHiddenSlide) {
         hiddenWithHandlers.push(entry.selector);
       }
       if (entry.visible && !entry.hasClick && !entry.hasKeyHandler && entry.tag === 'div') {

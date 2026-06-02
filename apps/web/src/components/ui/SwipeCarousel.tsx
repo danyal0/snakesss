@@ -20,6 +20,7 @@ export interface SwipeCarouselProps {
 /**
  * Horizontal swipe carousel. Each slide is one viewport width; transform uses
  * track-relative % so index 1 does not jump to the last slide (common -100% bug).
+ * Inactive slides are visibility:hidden until drag so off-screen controls are not focusable.
  */
 export function SwipeCarousel({
   activeIndex,
@@ -39,6 +40,7 @@ export function SwipeCarousel({
   const safeIndex = Math.min(Math.max(0, activeIndex), count - 1);
   const slideWidthPercent = 100 / count;
   const offsetPercent = safeIndex * slideWidthPercent;
+  const items = React.Children.toArray(children);
 
   return (
     <div
@@ -57,14 +59,23 @@ export function SwipeCarousel({
           transition: isDragging ? 'none' : 'transform 0.25s ease-out',
         }}
       >
-        {React.Children.map(children, (child) => (
-          <div
-            className="h-full flex-shrink-0 min-h-0 overflow-hidden"
-            style={{ width: `${slideWidthPercent}%` }}
-          >
-            {child}
-          </div>
-        ))}
+        {items.map((child, index) => {
+          const isActive = index === safeIndex;
+          const showSlide = isDragging || isActive;
+          return (
+            <div
+              key={index}
+              aria-hidden={!showSlide}
+              className={clsx(
+                'h-full flex-shrink-0 min-h-0 overflow-hidden',
+                !showSlide && 'pointer-events-none invisible'
+              )}
+              style={{ width: `${slideWidthPercent}%` }}
+            >
+              {child}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

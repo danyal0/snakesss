@@ -18,6 +18,8 @@ export interface InteractionMapEntry {
   hasKeyHandler: boolean;
   disabled: boolean;
   ariaLabel: string | null;
+  /** Inside a carousel slide hidden via aria-hidden (not dead UI). */
+  inHiddenSlide: boolean;
 }
 
 declare global {
@@ -34,7 +36,20 @@ function collectInteractionMap(): InteractionMapEntry[] {
     const html = el as HTMLElement;
     const rect = html.getBoundingClientRect();
     const style = window.getComputedStyle(html);
+    let hiddenByAncestor = false;
+    for (let node: HTMLElement | null = html.parentElement; node; node = node.parentElement) {
+      if (node.getAttribute('aria-hidden') === 'true') {
+        hiddenByAncestor = true;
+        break;
+      }
+      const nodeStyle = window.getComputedStyle(node);
+      if (nodeStyle.visibility === 'hidden' || nodeStyle.display === 'none') {
+        hiddenByAncestor = true;
+        break;
+      }
+    }
     const visible =
+      !hiddenByAncestor &&
       rect.width > 0 &&
       rect.height > 0 &&
       style.visibility !== 'hidden' &&
@@ -57,6 +72,7 @@ function collectInteractionMap(): InteractionMapEntry[] {
         (html as HTMLButtonElement).disabled === true ||
         html.getAttribute('aria-disabled') === 'true',
       ariaLabel: html.getAttribute('aria-label'),
+      inHiddenSlide: hiddenByAncestor,
     };
   });
 }

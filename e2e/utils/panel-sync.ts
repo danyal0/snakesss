@@ -36,7 +36,10 @@ export async function expectGameTabMatchesPanel(
 
   for (const panel of GAME_PANELS) {
     if (panel === expectedTab) continue;
-    await expect(page.getByTestId(`game-panel-${panel}`)).toHaveCount(0);
+    await expect(page.getByTestId(`game-panel-${panel}`)).toHaveAttribute(
+      'data-panel-visible',
+      'false'
+    );
   }
 }
 

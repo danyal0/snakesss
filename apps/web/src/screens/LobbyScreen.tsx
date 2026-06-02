@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { AvatarDisplay } from '../components/ui/Avatar';
 import { useSocket } from '../hooks/useSocket';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
+import { SwipeCarousel } from '../components/ui/SwipeCarousel';
 import { useGameStore } from '../store/gameStore';
 
 const LOBBY_TABS = ['players', 'bots', 'settings'] as const;
@@ -33,11 +34,12 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
   const isManager = me?.isRoomManager ?? false;
 
   const [tab, setTab] = useState<LobbyTab>('players');
-  const { activeIndex: lobbyActiveIndex, ...lobbySwipeHandlers } = useSwipeTabs(
-    LOBBY_TABS,
-    tab,
-    setTab
-  );
+  const {
+    activeIndex: lobbyActiveIndex,
+    dragOffset: lobbyDragOffset,
+    isDragging: lobbyIsDragging,
+    ...lobbySwipeHandlers
+  } = useSwipeTabs(LOBBY_TABS, tab, setTab);
   const [settings, setSettings] = useState<RoomSettings>(gameState.settings);
   const [copied, setCopied] = useState(false);
   const [botLoading, setBotLoading] = useState<BotPersona | null>(null);
@@ -187,19 +189,24 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
 
       {/* Tab content — swipeable carousel (players / bots / settings) */}
       <div
-        data-testid="lobby-tab-panels"
         className="flex-1 min-h-0 flex flex-col"
         data-active-tab={tab}
         data-carousel-index={lobbyActiveIndex}
-        onTouchStart={lobbySwipeHandlers.onTouchStart}
-        onTouchMove={lobbySwipeHandlers.onTouchMove}
-        onTouchEnd={lobbySwipeHandlers.onTouchEnd}
-        onTouchCancel={lobbySwipeHandlers.onTouchCancel}
       >
-          {tab === 'players' && (
+        <SwipeCarousel
+          testId="lobby-carousel"
+          activeIndex={lobbyActiveIndex}
+          slideCount={LOBBY_TABS.length}
+          dragOffset={lobbyDragOffset}
+          isDragging={lobbyIsDragging}
+          onTouchStart={lobbySwipeHandlers.onTouchStart}
+          onTouchMove={lobbySwipeHandlers.onTouchMove}
+          onTouchEnd={lobbySwipeHandlers.onTouchEnd}
+          onTouchCancel={lobbySwipeHandlers.onTouchCancel}
+        >
           <div
             data-testid="lobby-panel-players"
-            data-panel-visible="true"
+            data-panel-visible={tab === 'players'}
             className="h-full overflow-y-auto scrollbar-none px-4 py-3 space-y-2"
           >
               {activePlayers.length === 0 && (
@@ -293,12 +300,10 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 </div>
               )}
           </div>
-          )}
 
-          {tab === 'bots' && (
           <div
             data-testid="lobby-panel-bots"
-            data-panel-visible="true"
+            data-panel-visible={tab === 'bots'}
             className="h-full overflow-y-auto scrollbar-none px-4 py-3 space-y-4"
           >
               <p className="text-xs text-white/50 px-1">
@@ -385,12 +390,10 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 </div>
               )}
           </div>
-          )}
 
-          {tab === 'settings' && (
           <div
             data-testid="lobby-panel-settings"
-            data-panel-visible="true"
+            data-panel-visible={tab === 'settings'}
             className="h-full overflow-y-auto scrollbar-none px-4 py-3 space-y-4"
           >
               {!isManager && (
@@ -499,7 +502,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 </Button>
               )}
           </div>
-          )}
+        </SwipeCarousel>
       </div>
 
       {/* Bottom CTA */}
