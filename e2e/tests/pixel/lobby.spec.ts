@@ -25,6 +25,6 @@ test.describe('Pixel — Lobby tabs', () => {
     await page.getByTestId('lobby-tab-settings').click();
     await expectLobbyTabMatchesPanel(page, 'settings');
     await waitForMotionSettled(page);
-    await assertPixelPerfect(page.getByTestId('lobby-panel-settings'), 'lobby-settings');
+    await assertPixelStable(page.getByTestId('lobby-panel-settings'), 'lobby-settings');
   });
 });

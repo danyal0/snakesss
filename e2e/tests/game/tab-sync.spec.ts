@@ -40,6 +40,51 @@ test.describe('Game tab ↔ panel sync', () => {
     await expect(page.getByTestId('chat-panel')).toBeVisible();
   });
 
+  test('live socket transition voting → discussion: chat tab, not vote UI', async ({
+    page,
+    request,
+    e2eRoomId,
+  }) => {
+    await forceE2EPhase(request, e2eRoomId, 'voting');
+    await page.reload();
+    await readyGameScreen(page);
+
+    await forceE2EPhase(request, e2eRoomId, 'discussion');
+    await page.waitForFunction(
+      () =>
+        document.querySelector('[data-active-panel]')?.getAttribute('data-active-panel') ===
+        'chat',
+      { timeout: 15_000 }
+    );
+    await dismissBlockingGameOverlays(page);
+
+    await expectGameTabMatchesPanel(page, 'chat');
+    await expect(page.getByTestId('chat-panel')).toBeVisible();
+    await expect(page.getByText('Secret vote')).not.toBeVisible();
+  });
+
+  test('question → voting → discussion (reload per phase) shows chat panel', async ({
+    page,
+    request,
+    e2eRoomId,
+  }) => {
+    await forceE2EPhase(request, e2eRoomId, 'question');
+    await page.reload();
+    await readyGameScreen(page);
+
+    await forceE2EPhase(request, e2eRoomId, 'voting');
+    await page.reload();
+    await readyGameScreen(page);
+
+    await forceE2EPhase(request, e2eRoomId, 'discussion');
+    await page.reload();
+    await readyGameScreen(page);
+
+    await expectGameTabMatchesPanel(page, 'chat');
+    await expect(page.getByTestId('chat-panel')).toBeVisible();
+    await expect(page.getByText('Secret vote')).not.toBeVisible();
+  });
+
   test('manual tab clicks match visible panels', async ({ page }) => {
     await page.getByTestId('game-tab-players').click();
     await expectGameTabMatchesPanel(page, 'players');
@@ -64,8 +109,7 @@ test.describe('Game swipe on touch devices', () => {
 
   test('swipe from chat to vote shows vote panel', async ({ page }) => {
     await expectGameTabMatchesPanel(page, 'chat');
-    const carousel = page.locator('[data-active-panel]').first();
-    await swipeHorizontal(page, carousel, 'left');
+    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left');
     await expectGameTabMatchesPanel(page, 'vote');
   });
 });

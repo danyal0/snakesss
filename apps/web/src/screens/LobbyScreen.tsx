@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { AvatarDisplay } from '../components/ui/Avatar';
 import { useSocket } from '../hooks/useSocket';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
+import { SwipeCarousel } from '../components/ui/SwipeCarousel';
 import { useGameStore } from '../store/gameStore';
 
 const LOBBY_TABS = ['players', 'bots', 'settings'] as const;
@@ -188,24 +189,24 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
 
       {/* Tab content — swipeable carousel (players / bots / settings) */}
       <div
-        className="flex-1 min-h-0 overflow-hidden flex flex-col"
-        onTouchStart={lobbySwipeHandlers.onTouchStart}
-        onTouchMove={lobbySwipeHandlers.onTouchMove}
-        onTouchEnd={lobbySwipeHandlers.onTouchEnd}
-        onTouchCancel={lobbySwipeHandlers.onTouchCancel}
+        className="flex-1 min-h-0 flex flex-col"
         data-active-tab={tab}
         data-carousel-index={lobbyActiveIndex}
       >
-        <div
-          className="flex flex-1 min-h-0"
-          style={{
-            transform: `translateX(calc(-${lobbyActiveIndex * 100}% + ${lobbyDragOffset}px))`,
-            transition: lobbyIsDragging ? 'none' : 'transform 0.25s ease-out',
-          }}
+        <SwipeCarousel
+          testId="lobby-carousel"
+          activeIndex={lobbyActiveIndex}
+          slideCount={LOBBY_TABS.length}
+          dragOffset={lobbyDragOffset}
+          isDragging={lobbyIsDragging}
+          onTouchStart={lobbySwipeHandlers.onTouchStart}
+          onTouchMove={lobbySwipeHandlers.onTouchMove}
+          onTouchEnd={lobbySwipeHandlers.onTouchEnd}
+          onTouchCancel={lobbySwipeHandlers.onTouchCancel}
         >
           <div
             data-testid="lobby-panel-players"
-            className="w-full flex-shrink-0 overflow-y-auto scrollbar-none px-4 py-3 space-y-2"
+            className="h-full overflow-y-auto scrollbar-none px-4 py-3 space-y-2"
           >
               {activePlayers.length === 0 && (
                 <div className="text-center py-8 text-white/40 text-sm">
@@ -301,7 +302,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
 
           <div
             data-testid="lobby-panel-bots"
-            className="w-full flex-shrink-0 overflow-y-auto scrollbar-none px-4 py-3 space-y-4"
+            className="h-full overflow-y-auto scrollbar-none px-4 py-3 space-y-4"
           >
               <p className="text-xs text-white/50 px-1">
                 Add AI bots to fill empty spots. Bots chat naturally, bluff, and vote like real players.
@@ -390,7 +391,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
 
           <div
             data-testid="lobby-panel-settings"
-            className="w-full flex-shrink-0 overflow-y-auto scrollbar-none px-4 py-3 space-y-4"
+            className="h-full overflow-y-auto scrollbar-none px-4 py-3 space-y-4"
           >
               {!isManager && (
                 <div className="glass rounded-2xl px-4 py-3 border border-yellow-500/20">
@@ -498,7 +499,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 </Button>
               )}
           </div>
-        </div>
+        </SwipeCarousel>
       </div>
 
       {/* Bottom CTA */}

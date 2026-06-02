@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import clsx from 'clsx';
 import type { GameState, Player, VoteChoice } from '@snakesss/shared-types';
@@ -10,6 +10,7 @@ import { GameEndScreen } from '../components/game/GameEndScreen';
 import { QuestionOptions } from '../components/game/QuestionOptions';
 import { AnswerVotePanel } from '../components/game/AnswerVotePanel';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
+import { SwipeCarousel } from '../components/ui/SwipeCarousel';
 import { AnswerReveal } from '../components/game/AnswerReveal';
 import { Timer } from '../components/ui/Timer';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -82,8 +83,8 @@ export function GameScreen({ gameState }: GameScreenProps) {
     }
   }, [gameState.roundHistory]);
 
-  // Auto-switch tabs by phase — reset drag so carousel matches highlighted tab (fixes round-2 desync)
-  useEffect(() => {
+  // Sync tab + carousel before paint when phase/round changes (avoids chat tab + vote panel flash)
+  useLayoutEffect(() => {
     if (gameState.phase === 'question') setActivePanel('players');
     else if (gameState.phase === 'discussion') setActivePanel('chat');
     else if (gameState.phase === 'voting') setActivePanel('vote');
@@ -304,13 +305,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
 
           {/* Standard tabbed phases */}
           {!isFullScreenPhase && gameState.phase !== 'scores' && (
-            <div
-              className="flex flex-col flex-1 min-h-0"
-              onTouchStart={gameSwipeHandlers.onTouchStart}
-              onTouchMove={gameSwipeHandlers.onTouchMove}
-              onTouchEnd={gameSwipeHandlers.onTouchEnd}
-              onTouchCancel={gameSwipeHandlers.onTouchCancel}
-            >
+            <div className="flex flex-col flex-1 min-h-0">
               <div className="flex border-b border-white/8 flex-shrink-0">
                 {(['players', 'chat', 'vote'] as ActivePanel[]).map((panel) => (
                   <button
@@ -346,21 +341,24 @@ export function GameScreen({ gameState }: GameScreenProps) {
               </div>
 
               {/* Swipeable panel carousel */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <div
-                  key={`carousel-r${gameState.round}-${gameState.phase}`}
-                  className="flex h-full"
-                  style={{
-                    transform: `translateX(calc(-${gameActiveIndex * 100}% + ${gameSwipeHandlers.dragOffset}px))`,
-                    transition: gameSwipeHandlers.isDragging ? 'none' : 'transform 0.25s ease-out',
-                  }}
-                  data-active-panel={activePanel}
-                  data-carousel-index={gameActiveIndex}
+              <div
+                key={`carousel-r${gameState.round}-${gameState.phase}`}
+                className="flex-1 min-h-0 flex flex-col"
+                data-active-panel={activePanel}
+                data-carousel-index={gameActiveIndex}
+              >
+                <SwipeCarousel
+                  testId="game-carousel"
+                  activeIndex={gameActiveIndex}
+                  slideCount={gamePanels.length}
+                  dragOffset={gameSwipeHandlers.dragOffset}
+                  isDragging={gameSwipeHandlers.isDragging}
+                  onTouchStart={gameSwipeHandlers.onTouchStart}
+                  onTouchMove={gameSwipeHandlers.onTouchMove}
+                  onTouchEnd={gameSwipeHandlers.onTouchEnd}
+                  onTouchCancel={gameSwipeHandlers.onTouchCancel}
                 >
-                  <div
-                    data-testid="game-panel-players"
-                    className="w-full h-full flex-shrink-0 min-h-0"
-                  >
+                  <div data-testid="game-panel-players" className="h-full min-h-0">
                     {gameState.phase === 'discussion' && gameState.currentQuestion ? (
                       <QuestionOptions question={gameState.currentQuestion} mode="discussion" phaseEndsAt={gameState.phaseEndsAt} timerLabel="Debate" />
                     ) : (
@@ -381,10 +379,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                     )}
                   </div>
 
-                  <div
-                    data-testid="game-panel-chat"
-                    className="w-full h-full flex-shrink-0 min-h-0"
-                  >
+                  <div data-testid="game-panel-chat" className="h-full min-h-0">
                     <ChatPanel
                       messages={gameState.chat}
                       typingIndicators={typingIndicators}
@@ -395,10 +390,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                     />
                   </div>
 
-                  <div
-                    data-testid="game-panel-vote"
-                    className="w-full h-full flex-shrink-0 min-h-0"
-                  >
+                  <div data-testid="game-panel-vote" className="h-full min-h-0">
                     {!isAlive && !isSpectator ? (
                       <EliminatedSpectatorView
                         gameState={gameState}
@@ -408,7 +400,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       <EmptyVote roundHistory={gameState.roundHistory} />
                     )}
                   </div>
-                </div>
+                </SwipeCarousel>
               </div>
             </div>
           )}

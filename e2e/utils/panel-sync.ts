@@ -27,6 +27,7 @@ export async function expectGameTabMatchesPanel(
   );
 
   expect(sync.ok, `tab/panel desync: ${JSON.stringify(sync)}`).toBe(true);
+
   await expect(page.getByTestId(`game-panel-${expectedTab}`)).toBeInViewport();
 }
 
