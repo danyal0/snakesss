@@ -7,6 +7,7 @@ import { leaderboard } from './LeaderboardStore';
 import { RoomManager } from './RoomManager';
 import { registerSocketHandlers } from './SocketHandler';
 import { createAdminRouter } from './AdminAPI';
+import { createE2ETestRouter } from './E2ETestAPI';
 import { verifyAdminToken } from './auth';
 import type { ClientToServerEvents, ServerToClientEvents } from '@snakesss/shared-types';
 
@@ -54,6 +55,11 @@ roomManager.setRoomBroadcast((roomId) => {
 // ── REST API routes ──────────────────────────────────────────────────────────
 
 app.use('/api/admin', createAdminRouter(roomManager, (roomId) => roomManager.broadcastRoom(roomId)));
+
+if (process.env['E2E_TEST'] === '1') {
+  app.use('/api/e2e', createE2ETestRouter(roomManager, (roomId) => roomManager.broadcastRoom(roomId)));
+  console.log('  E2E test API enabled at /api/e2e');
+}
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', rooms: roomManager.getRoomList().length, uptime: process.uptime() });

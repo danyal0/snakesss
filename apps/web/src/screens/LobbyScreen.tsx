@@ -87,7 +87,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
   };
 
   return (
-    <div className="h-full app-bg flex flex-col overflow-hidden">
+    <div data-testid="lobby-screen" className="h-full app-bg flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 px-4 pt-4 pb-3 space-y-3">
         <div className="flex items-center justify-between">
@@ -108,7 +108,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
           <div>
             <p className="text-[10px] text-white/40 uppercase tracking-widest mb-0.5">Room Code</p>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-black tracking-[0.2em] font-mono text-white">
+              <span data-testid="room-code" className="text-2xl font-black tracking-[0.2em] font-mono text-white">
                 {gameState.roomId}
               </span>
             </div>
@@ -155,6 +155,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
         {(['players', 'bots', 'settings'] as const).map((t) => (
           <button
             key={t}
+            data-testid={`lobby-tab-${t}`}
             onClick={() => setTab(t)}
             className={clsx(
               'flex-1 py-2.5 text-sm font-medium relative transition-colors',
@@ -504,6 +505,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
 
         {isManager ? (
           <Button
+            data-testid="btn-start-game"
             variant="primary"
             size="lg"
             className="w-full"

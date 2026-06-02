@@ -29,7 +29,7 @@ export function DashboardScreen() {
   ];
 
   return (
-    <div className="h-full app-bg flex overflow-hidden">
+    <div data-testid="admin-dashboard" className="h-full app-bg flex overflow-hidden">
       {/* Sidebar */}
       <div className="w-56 flex-shrink-0 flex flex-col glass border-r border-white/10">
         <div className="p-5 border-b border-white/10">

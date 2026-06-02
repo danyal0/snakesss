@@ -209,3 +209,13 @@
     radial-gradient(ellipse at 60% 80%, rgba(255, 59, 107, 0.03) 0%, transparent 50%),
     #0a0a0f;
 }
+
+/* E2E: freeze motion for deterministic screenshots */
+html.e2e-reduce-motion *,
+html.e2e-reduce-motion *::before,
+html.e2e-reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-delay: 0s !important;
+  transition-duration: 0.001ms !important;
+  transition-delay: 0s !important;
+}

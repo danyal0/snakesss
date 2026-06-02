@@ -58,8 +58,9 @@ export function HomeScreen() {
   };
 
   return (
-    <div className="h-full app-bg flex flex-col items-center justify-center p-6 overflow-y-auto scrollbar-none">
-      {/* Background decoration */}
+    <div data-testid="home-screen" className="h-full app-bg flex flex-col items-center justify-center p-6 overflow-y-auto scrollbar-none">
+      {/* Background decoration — hidden in E2E for stable screenshots */}
+      {import.meta.env.VITE_E2E !== 'true' && (
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         {['🐍', '🦊', '🐺', '🦅', '🐻'].map((emoji, i) => (
           <motion.div
@@ -76,6 +77,7 @@ export function HomeScreen() {
           </motion.div>
         ))}
       </div>
+      )}
 
       <div className="w-full max-w-sm space-y-6 relative">
         {/* Logo */}
@@ -118,6 +120,7 @@ export function HomeScreen() {
             className="space-y-3"
           >
             <Button
+              data-testid="btn-create-room"
               variant="primary"
               size="lg"
               className="w-full"
@@ -127,6 +130,7 @@ export function HomeScreen() {
               Create Room
             </Button>
             <Button
+              data-testid="btn-join-room"
               variant="secondary"
               size="lg"
               className="w-full"
@@ -136,6 +140,7 @@ export function HomeScreen() {
               Join Room
             </Button>
             <Button
+              data-testid="btn-browse-rooms"
               variant="ghost"
               size="md"
               className="w-full"
@@ -144,6 +149,7 @@ export function HomeScreen() {
               Browse Public Rooms
             </Button>
             <Button
+              data-testid="btn-leaderboard"
               variant="ghost"
               size="sm"
               className="w-full"
@@ -162,7 +168,7 @@ export function HomeScreen() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            <GlassCard className="p-6 space-y-5">
+            <GlassCard data-testid={mode === 'create' ? 'create-room-form' : 'join-room-form'} className="p-6 space-y-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold">
                   {mode === 'create' ? 'Create Room' : 'Join Room'}
@@ -184,6 +190,7 @@ export function HomeScreen() {
               </div>
 
               <Input
+                data-testid="input-username"
                 label="Your Name"
                 placeholder="Enter username"
                 value={username}
@@ -195,6 +202,7 @@ export function HomeScreen() {
               {mode === 'join' && (
                 <>
                   <Input
+                    data-testid="input-room-code"
                     label="Room Code"
                     placeholder="e.g. ABC123"
                     value={roomCode}
@@ -221,6 +229,7 @@ export function HomeScreen() {
               )}
 
               <Button
+                data-testid="btn-submit-room"
                 variant="primary"
                 size="lg"
                 className="w-full"

@@ -23,6 +23,7 @@ export default defineConfig({
   base: '/admin',
   plugins: [react(), adminRootRedirect()],
   server: {
+    host: '127.0.0.1',
     port: 5174,
     open: '/admin/',
     proxy: {
