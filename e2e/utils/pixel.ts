@@ -42,7 +42,7 @@ export async function assertPixelStable(
     animations: 'disabled',
     caret: 'hide',
     scale: 'css',
-    maxDiffPixels: 80,
-    threshold: 0.12,
+    maxDiffPixelRatio: 0.02,
+    threshold: 0.15,
   });
 }
