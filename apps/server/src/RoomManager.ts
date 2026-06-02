@@ -40,6 +40,7 @@ interface CompletedGame {
 export class RoomManager {
   private rooms = new Map<string, RoomEntry>();
   private completedGames: CompletedGame[] = [];
+  private testSeed = '0';
   private aiProvider = this.buildProvider();
   private onRoomStateChange?: (roomId: string, state: GameState) => void;
   private onRoomPhaseEnd?: (roomId: string, phase: GamePhase) => void;
@@ -242,5 +243,21 @@ export class RoomManager {
       rooms: this.getRoomList(),
       analytics: this.getAnalytics(),
     };
+  }
+
+  /** E2E only — tear down every active room */
+  resetAllRooms(): void {
+    for (const roomId of [...this.rooms.keys()]) {
+      this.closeRoom(roomId);
+    }
+    this.completedGames = [];
+  }
+
+  setTestSeed(seed: string): void {
+    this.testSeed = seed;
+  }
+
+  getTestSeed(): string {
+    return this.testSeed;
   }
 }
