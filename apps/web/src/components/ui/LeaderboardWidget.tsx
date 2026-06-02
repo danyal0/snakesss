@@ -33,7 +33,7 @@ export function LeaderboardWidget() {
         onClick={() => navigate('/leaderboard')}
         className="w-full"
       >
-        <div className="px-4 py-2.5 flex items-center justify-between border-b border-white/8">
+        <div data-testid="leaderboard-widget" className="px-4 py-2.5 flex items-center justify-between border-b border-white/8">
           <div className="flex items-center gap-2">
             <span className="text-sm">🏆</span>
             <span className="text-xs font-semibold text-white/70 uppercase tracking-wider">

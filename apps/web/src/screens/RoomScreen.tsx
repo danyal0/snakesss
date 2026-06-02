@@ -67,7 +67,7 @@ export function RoomScreen() {
 
   if (joinError) {
     return (
-      <div className="h-full app-bg flex flex-col items-center justify-center gap-6 p-6">
+      <div data-testid="room-error" className="h-full app-bg flex flex-col items-center justify-center gap-6 p-6">
         <div className="text-5xl">🚫</div>
         <div className="text-center space-y-1">
           <p className="text-white font-semibold">Could not rejoin room</p>
@@ -85,7 +85,7 @@ export function RoomScreen() {
 
   if (!gameState || gameState.roomId !== roomId) {
     return (
-      <div className="h-full app-bg flex flex-col items-center justify-center gap-4 p-6">
+      <div data-testid="room-loading" className="h-full app-bg flex flex-col items-center justify-center gap-4 p-6">
         <div className="text-5xl" style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>🐍</div>
         <p className="text-white/60 text-sm text-center">
           Connecting to room{' '}

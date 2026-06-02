@@ -34,7 +34,7 @@ export function LoginScreen() {
   };
 
   return (
-    <div className="h-full app-bg flex items-center justify-center p-6">
+    <div data-testid="admin-login-screen" className="h-full app-bg flex items-center justify-center p-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -48,6 +48,7 @@ export function LoginScreen() {
 
         <div className="space-y-4">
           <input
+            data-testid="admin-password-input"
             type="password"
             placeholder="Admin password"
             value={password}
@@ -59,6 +60,7 @@ export function LoginScreen() {
           {error && <p className="text-sm text-red-400 text-center">{error}</p>}
 
           <button
+            data-testid="admin-login-btn"
             onClick={handleLogin}
             disabled={loading || !password}
             className="w-full btn-primary rounded-xl px-6 py-3 font-semibold disabled:opacity-50"

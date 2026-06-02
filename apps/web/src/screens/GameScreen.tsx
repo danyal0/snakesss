@@ -140,7 +140,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
     gameState.phase === 'answer_reveal';
 
   return (
-    <div className="h-full app-bg flex flex-col overflow-hidden">
+    <div data-testid="game-screen" className="h-full app-bg flex flex-col overflow-hidden">
 
       {/* ── Overlays ─────────────────────────── */}
       {gameState.phase === 'dealing' && (
@@ -160,7 +160,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
       <div className="flex-shrink-0 px-4 pt-3 pb-1.5">
         {/* Phase row */}
         <div className="flex items-center justify-between gap-2 mb-3">
-          <div className={clsx('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold', phase.color)}>
+          <div data-testid="phase-badge" className={clsx('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold', phase.color)}>
             <div className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', phase.dot)} />
             <span className="truncate">{phase.label}</span>
             <span className="text-white/30 flex-shrink-0">·</span>
@@ -307,6 +307,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                 {(['players', 'chat', 'vote'] as ActivePanel[]).map((panel) => (
                   <button
                     key={panel}
+                    data-testid={`game-tab-${panel}`}
                     onClick={() => {
                       setActivePanel(panel);
                       if (panel === 'chat') setLastReadCount(gameState.chat.length);

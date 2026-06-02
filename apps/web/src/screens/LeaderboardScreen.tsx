@@ -55,7 +55,7 @@ export function LeaderboardScreen() {
   }, [fetchLeaderboard]);
 
   return (
-    <div className="h-full app-bg flex flex-col overflow-hidden">
+    <div data-testid="leaderboard-screen" className="h-full app-bg flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 px-4 pt-4 pb-3">
         <div className="flex items-center gap-3 mb-4">

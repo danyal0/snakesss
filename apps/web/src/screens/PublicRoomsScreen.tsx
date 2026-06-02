@@ -40,7 +40,7 @@ export function PublicRoomsScreen() {
   };
 
   return (
-    <div className="h-full app-bg flex flex-col p-4 gap-4 overflow-y-auto scrollbar-none">
+    <div data-testid="public-rooms-screen" className="h-full app-bg flex flex-col p-4 gap-4 overflow-y-auto scrollbar-none">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate('/')}>← Back</Button>
         <h1 className="text-xl font-bold">Public Rooms</h1>

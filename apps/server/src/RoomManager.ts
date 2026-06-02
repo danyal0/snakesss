@@ -155,7 +155,10 @@ export class RoomManager {
     const botNames = ['Cipher', 'Ember', 'Vex', 'Nova', 'Rook', 'Jinx', 'Blaze', 'Specter'];
     const botAvatars: AvatarEmoji[] = ['🐍', '🦊', '🐺', '🦅', '🐻', '🦁'];
     const botId = generateId('bot');
-    const botName = botNames[Math.floor(Math.random() * botNames.length)] + '_AI';
+    const botName =
+      process.env['E2E_TEST'] === '1'
+        ? `E2E_${persona}`
+        : botNames[Math.floor(Math.random() * botNames.length)] + '_AI';
     const botAvatar = botAvatars[Math.floor(Math.random() * botAvatars.length)];
 
     const result = room.engine.addPlayer(botId, botName, botAvatar, false, true, persona);

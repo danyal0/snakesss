@@ -58,7 +58,7 @@ export function ChatPanel({
   const otherTyping = typingIndicators.filter((t) => t.playerId !== myPlayerId && t.isTyping);
 
   return (
-    <div className="flex flex-col h-full">
+    <div data-testid="chat-panel" className="flex flex-col h-full">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto scrollbar-none space-y-2 p-3">
         <AnimatePresence initial={false}>
