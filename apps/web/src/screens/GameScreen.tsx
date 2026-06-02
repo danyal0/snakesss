@@ -10,7 +10,7 @@ import { GameEndScreen } from '../components/game/GameEndScreen';
 import { QuestionOptions } from '../components/game/QuestionOptions';
 import { AnswerVotePanel } from '../components/game/AnswerVotePanel';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
-import { SwipeCarousel } from '../components/ui/SwipeCarousel';
+import { GAME_PANELS, defaultPanelForPhase, type GamePanel } from '../utils/gamePanels';
 import { AnswerReveal } from '../components/game/AnswerReveal';
 import { Timer } from '../components/ui/Timer';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -28,24 +28,25 @@ interface GameScreenProps {
   gameState: GameState;
 }
 
-type ActivePanel = 'players' | 'chat' | 'vote';
-
 export function GameScreen({ gameState }: GameScreenProps) {
   const navigate = useNavigate();
   const { sendMessage, castVote, sendTyping, submitAnswer } = useSocket();
   const store = useGameStore();
-  const [activePanel, setActivePanel] = useState<ActivePanel>('players');
+  /** User tab pick within current phase; cleared when phase/round changes. */
+  const [manualPanel, setManualPanel] = useState<GamePanel | null>(null);
+  const phaseRoundKey = `${gameState.round}-${gameState.phase}`;
+  const activePanel = manualPanel ?? defaultPanelForPhase(gameState.phase);
+  const setActivePanel = useCallback((panel: GamePanel) => setManualPanel(panel), []);
 
   const playerId = store.playerId;
   const myRole = store.myRole;
   const typingIndicators = store.typingIndicators;
   const hasVoted = selectHasVoted(store);
-  const gamePanels = ['players', 'chat', 'vote'] as const;
   const {
     resetDrag: resetGameSwipe,
     activeIndex: gameActiveIndex,
     ...gameSwipeHandlers
-  } = useSwipeTabs(gamePanels, activePanel, setActivePanel);
+  } = useSwipeTabs(GAME_PANELS, activePanel, setActivePanel);
   const alivePlayers = selectAlivePlayers(store);
 
   const me = playerId ? gameState.players.find((p) => p.id === playerId) : undefined;
@@ -83,17 +84,11 @@ export function GameScreen({ gameState }: GameScreenProps) {
     }
   }, [gameState.roundHistory]);
 
-  // Sync tab + carousel before paint when phase/round changes (avoids chat tab + vote panel flash)
+  // Reset manual tab on phase/round change so discussion always opens on chat
   useLayoutEffect(() => {
-    if (gameState.phase === 'question') setActivePanel('players');
-    else if (gameState.phase === 'discussion') setActivePanel('chat');
-    else if (gameState.phase === 'voting') setActivePanel('vote');
-    else if (gameState.phase === 'answer_reveal') setActivePanel('players');
-    else if (gameState.phase === 'scores' || gameState.phase === 'elimination') {
-      setActivePanel('players');
-    }
+    setManualPanel(null);
     resetGameSwipe();
-  }, [gameState.phase, gameState.round, resetGameSwipe]);
+  }, [phaseRoundKey, resetGameSwipe]);
 
   const handleVote = useCallback((targetId: string) => castVote(targetId), [castVote]);
   const handleSend = useCallback(
@@ -307,7 +302,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
           {!isFullScreenPhase && gameState.phase !== 'scores' && (
             <div className="flex flex-col flex-1 min-h-0">
               <div className="flex border-b border-white/8 flex-shrink-0">
-                {(['players', 'chat', 'vote'] as ActivePanel[]).map((panel) => (
+                {GAME_PANELS.map((panel) => (
                   <button
                     key={panel}
                     data-testid={`game-tab-${panel}`}
@@ -340,25 +335,20 @@ export function GameScreen({ gameState }: GameScreenProps) {
                 ))}
               </div>
 
-              {/* Swipeable panel carousel */}
+              {/* One visible panel per tab — avoids transform/carousel desync */}
               <div
-                key={`carousel-r${gameState.round}-${gameState.phase}`}
+                key={phaseRoundKey}
+                data-testid="game-tab-panels"
                 className="flex-1 min-h-0 flex flex-col"
                 data-active-panel={activePanel}
                 data-carousel-index={gameActiveIndex}
+                onTouchStart={gameSwipeHandlers.onTouchStart}
+                onTouchMove={gameSwipeHandlers.onTouchMove}
+                onTouchEnd={gameSwipeHandlers.onTouchEnd}
+                onTouchCancel={gameSwipeHandlers.onTouchCancel}
               >
-                <SwipeCarousel
-                  testId="game-carousel"
-                  activeIndex={gameActiveIndex}
-                  slideCount={gamePanels.length}
-                  dragOffset={gameSwipeHandlers.dragOffset}
-                  isDragging={gameSwipeHandlers.isDragging}
-                  onTouchStart={gameSwipeHandlers.onTouchStart}
-                  onTouchMove={gameSwipeHandlers.onTouchMove}
-                  onTouchEnd={gameSwipeHandlers.onTouchEnd}
-                  onTouchCancel={gameSwipeHandlers.onTouchCancel}
-                >
-                  <div data-testid="game-panel-players" className="h-full min-h-0">
+                {activePanel === 'players' && (
+                  <div data-testid="game-panel-players" data-panel-visible="true" className="h-full min-h-0">
                     {gameState.phase === 'discussion' && gameState.currentQuestion ? (
                       <QuestionOptions question={gameState.currentQuestion} mode="discussion" phaseEndsAt={gameState.phaseEndsAt} timerLabel="Debate" />
                     ) : (
@@ -378,8 +368,10 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       </div>
                     )}
                   </div>
+                )}
 
-                  <div data-testid="game-panel-chat" className="h-full min-h-0">
+                {activePanel === 'chat' && (
+                  <div data-testid="game-panel-chat" data-panel-visible="true" className="h-full min-h-0">
                     <ChatPanel
                       messages={gameState.chat}
                       typingIndicators={typingIndicators}
@@ -389,8 +381,10 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       onTyping={sendTyping}
                     />
                   </div>
+                )}
 
-                  <div data-testid="game-panel-vote" className="h-full min-h-0">
+                {activePanel === 'vote' && (
+                  <div data-testid="game-panel-vote" data-panel-visible="true" className="h-full min-h-0">
                     {!isAlive && !isSpectator ? (
                       <EliminatedSpectatorView
                         gameState={gameState}
@@ -400,7 +394,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       <EmptyVote roundHistory={gameState.roundHistory} />
                     )}
                   </div>
-                </SwipeCarousel>
+                )}
               </div>
             </div>
           )}

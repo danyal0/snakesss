@@ -12,7 +12,7 @@ test.describe('Lobby swipe gestures', () => {
     await expect(page.getByTestId('lobby-screen')).toBeVisible();
     await expectLobbyTabMatchesPanel(page, 'players');
 
-    const swipeTarget = page.getByTestId('lobby-carousel');
+    const swipeTarget = page.getByTestId('lobby-tab-panels');
     await swipeHorizontal(page, swipeTarget, 'left');
     await expectLobbyTabMatchesPanel(page, 'bots');
     await expect(page.getByText(/Add a bot|Only the room manager/i).first()).toBeVisible();
@@ -20,7 +20,7 @@ test.describe('Lobby swipe gestures', () => {
 
   test('swipe left twice reaches settings panel', async ({ page, e2eRoomId }) => {
     await expect(page.getByTestId('lobby-screen')).toBeVisible();
-    const swipeTarget = page.getByTestId('lobby-carousel');
+    const swipeTarget = page.getByTestId('lobby-tab-panels');
 
     await swipeHorizontal(page, swipeTarget, 'left');
     await expectLobbyTabMatchesPanel(page, 'bots');
@@ -35,7 +35,7 @@ test.describe('Lobby swipe gestures', () => {
     await page.getByTestId('lobby-tab-settings').click();
     await expectLobbyTabMatchesPanel(page, 'settings');
 
-    const swipeTarget = page.getByTestId('lobby-carousel');
+    const swipeTarget = page.getByTestId('lobby-tab-panels');
     await swipeHorizontal(page, swipeTarget, 'right');
     await expectLobbyTabMatchesPanel(page, 'bots');
   });
@@ -47,7 +47,7 @@ test.describe('Lobby swipe gestures', () => {
     await page.getByTestId('lobby-tab-settings').click();
     await expectLobbyTabMatchesPanel(page, 'settings');
 
-    await swipeHorizontal(page, page.getByTestId('lobby-carousel'), 'right');
+    await swipeHorizontal(page, page.getByTestId('lobby-tab-panels'), 'right');
     await expectLobbyTabMatchesPanel(page, 'bots');
   });
 });

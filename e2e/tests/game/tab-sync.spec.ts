@@ -23,6 +23,23 @@ test.describe('Game tab ↔ panel sync', () => {
     await expect(page.locator('[data-active-panel="chat"]')).toBeVisible();
   });
 
+  test('discussion: chat input visible before any messages', async ({ page }) => {
+    await expectGameTabMatchesPanel(page, 'chat');
+    await expect(page.getByTestId('chat-empty-state')).toBeVisible();
+    await expect(page.getByTestId('chat-input')).toBeVisible();
+    await expect(page.getByTestId('chat-send')).toBeVisible();
+    await expect(page.getByText('Answer voting opens after the debate')).not.toBeVisible();
+    await expect(page.getByText('Secret vote')).not.toBeVisible();
+  });
+
+  test('discussion: player can send first message before bots', async ({ page }) => {
+    await expect(page.getByTestId('chat-input')).toBeVisible();
+    await page.getByTestId('chat-input').fill('First human message');
+    await page.getByTestId('chat-send').click();
+    await expect(page.getByText('First human message')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('chat-empty-state')).not.toBeVisible();
+  });
+
   test('simulated round-2 transition voting → discussion keeps chat aligned', async ({
     page,
     request,
@@ -109,7 +126,7 @@ test.describe('Game swipe on touch devices', () => {
 
   test('swipe from chat to vote shows vote panel', async ({ page }) => {
     await expectGameTabMatchesPanel(page, 'chat');
-    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left');
+    await swipeHorizontal(page, page.getByTestId('game-tab-panels'), 'left');
     await expectGameTabMatchesPanel(page, 'vote');
   });
 });

@@ -28,7 +28,16 @@ export async function expectGameTabMatchesPanel(
 
   expect(sync.ok, `tab/panel desync: ${JSON.stringify(sync)}`).toBe(true);
 
-  await expect(page.getByTestId(`game-panel-${expectedTab}`)).toBeInViewport();
+  await expect(page.getByTestId(`game-panel-${expectedTab}`)).toBeVisible();
+  await expect(page.getByTestId(`game-panel-${expectedTab}`)).toHaveAttribute(
+    'data-panel-visible',
+    'true'
+  );
+
+  for (const panel of GAME_PANELS) {
+    if (panel === expectedTab) continue;
+    await expect(page.getByTestId(`game-panel-${panel}`)).toHaveCount(0);
+  }
 }
 
 export async function expectLobbyTabMatchesPanel(
@@ -38,8 +47,11 @@ export async function expectLobbyTabMatchesPanel(
   const expectedIndex = LOBBY_PANELS.indexOf(expectedTab);
   await expect(page.getByTestId(`lobby-tab-${expectedTab}`)).toHaveClass(/text-white/);
 
-  const panel = page.getByTestId(`lobby-panel-${expectedTab}`);
-  await expect(panel).toBeVisible();
+  await expect(page.getByTestId(`lobby-panel-${expectedTab}`)).toBeVisible();
+  await expect(page.getByTestId(`lobby-panel-${expectedTab}`)).toHaveAttribute(
+    'data-panel-visible',
+    'true'
+  );
 
   const sync = await page.evaluate(
     ({ expectedIndex, panels }) => {

@@ -60,7 +60,19 @@ export function ChatPanel({
   return (
     <div data-testid="chat-panel" className="flex flex-col h-full">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-none space-y-2 p-3">
+      <div className="flex-1 overflow-y-auto scrollbar-none space-y-2 p-3 min-h-0">
+        {messages.length === 0 && (
+          <div
+            data-testid="chat-empty-state"
+            className="flex flex-col items-center justify-center gap-2 py-10 px-4 text-center"
+          >
+            <span className="text-3xl opacity-40">💬</span>
+            <p className="text-sm text-white/55">Debate is open — be the first to speak</p>
+            {canChat && (
+              <p className="text-xs text-white/35">Type a message below</p>
+            )}
+          </div>
+        )}
         <AnimatePresence initial={false}>
           {messages.map((msg) => (
             <motion.div
@@ -166,6 +178,7 @@ export function ChatPanel({
           <div className="flex gap-2">
             <input
               ref={inputRef}
+              data-testid="chat-input"
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -178,6 +191,7 @@ export function ChatPanel({
               )}
             />
             <motion.button
+              data-testid="chat-send"
               whileTap={{ scale: 0.9 }}
               onClick={handleSend}
               disabled={!input.trim()}
