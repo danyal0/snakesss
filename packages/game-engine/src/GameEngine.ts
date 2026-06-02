@@ -470,16 +470,22 @@ export class GameEngine {
   }
 
   nextRound(): void {
+    const activePlayers = this.state.players.filter(
+      (p) => !p.isSpectator && p.isConnected && p.isAlive
+    );
+    if (activePlayers.length >= 3) {
+      this.roleMap = assignRoles(activePlayers, this.state.settings);
+    }
     this.state = { ...this.state, round: this.state.round + 1 };
+    this.emit('role_assigned', { round: this.state.round });
     this.notifyStateChange();
   }
 
   // ─── Win Condition ────────────────────────────────────────────────────────
 
   evaluateWin(): WinCondition {
-    const alivePlayers = this.state.players.filter((p) => p.isAlive && !p.isSpectator);
     return checkWinCondition(
-      alivePlayers,
+      this.state.players.filter((p) => !p.isSpectator),
       this.roleMap,
       this.state.totalRounds,
       this.state.round

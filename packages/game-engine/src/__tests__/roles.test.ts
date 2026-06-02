@@ -25,17 +25,25 @@ const settings: RoomSettings = {
 };
 
 describe('buildRolePool', () => {
-  it('returns correct count for 7 players per Big Potato table', () => {
-    const pool = buildRolePool(settings, 7);
-    expect(pool.length).toBe(7);
-    // Big Potato 7-player: 3 snakes, 3 humans, 1 mongoose
-    expect(pool.filter((r) => r === 'snake').length).toBe(3);
-    expect(pool.filter((r) => r === 'mongoose').length).toBe(1);
+  it('uses manager-configured snake count', () => {
+    const pool = buildRolePool(
+      { ...settings, roleDistribution: { snakes: 1, humans: 2, mongooses: 0 }, advancedRoles: false },
+      4
+    );
+    expect(pool.length).toBe(4);
+    expect(pool.filter((r) => r === 'snake').length).toBe(1);
     expect(pool.filter((r) => r === 'human').length).toBe(3);
   });
 
-  it('returns correct distribution for 4 players (Big Potato default)', () => {
-    // 4-player: 2 snakes, 1 human, 1 mongoose
+  it('returns correct count for 7 players with manager snake setting', () => {
+    const pool = buildRolePool(settings, 7);
+    expect(pool.length).toBe(7);
+    expect(pool.filter((r) => r === 'snake').length).toBe(2);
+    expect(pool.filter((r) => r === 'mongoose').length).toBe(1);
+    expect(pool.filter((r) => r === 'human').length).toBe(4);
+  });
+
+  it('returns correct distribution for 4 players with default settings', () => {
     const pool = buildRolePool(settings, 4);
     expect(pool.length).toBe(4);
     expect(pool.filter((r) => r === 'snake').length).toBe(2);
@@ -60,7 +68,7 @@ describe('assignRoles', () => {
     expect(roles.size).toBe(7);
     // Big Potato 7-player: 3 snakes
     const snakes = Array.from(roles.values()).filter((r) => r.type === 'snake');
-    expect(snakes.length).toBe(3);
+    expect(snakes.length).toBe(2);
   });
 
   it('skips spectators in role assignment', () => {
@@ -88,13 +96,30 @@ describe('checkWinCondition', () => {
     expect(checkWinCondition(players, roles, 6, 1)).toBe('humans');
   });
 
-  it('returns snakes when snakes >= villagers', () => {
+  it('returns snakes when snakes >= villagers mid-game', () => {
     const players = [makePlayer('s1'), makePlayer('v1')];
     const roles = new Map([
       ['s1', { type: 'snake' as const, revealed: false }],
       ['v1', { type: 'human' as const, revealed: false }],
     ]);
     expect(checkWinCondition(players, roles, 6, 1)).toBe('snakes');
+  });
+
+  it('uses team scores on the final round instead of parity', () => {
+    const players = [
+      { ...makePlayer('s1'), score: 2 },
+      { ...makePlayer('s2'), score: 2 },
+      { ...makePlayer('h1'), score: 9 },
+      { ...makePlayer('h2'), score: 9 },
+    ];
+    const roles = new Map([
+      ['s1', { type: 'snake' as const, revealed: false }],
+      ['s2', { type: 'snake' as const, revealed: false }],
+      ['h1', { type: 'human' as const, revealed: false }],
+      ['h2', { type: 'human' as const, revealed: false }],
+    ]);
+    // Final round with 2v2 alive — humans have higher score
+    expect(checkWinCondition(players, roles, 6, 6)).toBe('humans');
   });
 
   it('returns null when game continues', () => {

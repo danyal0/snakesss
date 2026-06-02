@@ -79,6 +79,19 @@ describe('multi-round game flow', () => {
     expect(engine.getAnswerMap().size).toBe(3);
   });
 
+  it('reassigns roles randomly when advancing to the next round', async () => {
+    await engine.transitionToQuestion();
+    voteForAll(engine);
+    const round1Roles = new Map(engine.getAllRoles());
+
+    engine.nextRound();
+    const round2Roles = engine.getAllRoles();
+
+    expect(round2Roles.size).toBe(round1Roles.size);
+    expect([...round2Roles.values()].some((r) => r.type === 'snake')).toBe(true);
+    expect([...round2Roles.values()].some((r) => r.type === 'human')).toBe(true);
+  });
+
   it('rejects answers during discussion and enforces snake token rules', async () => {
     await engine.transitionToQuestion();
     engine.transitionToDiscussion();

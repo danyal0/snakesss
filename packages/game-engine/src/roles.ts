@@ -12,15 +12,16 @@ import { shuffleArray } from './utils';
 export function buildRolePool(settings: RoomSettings, playerCount: number): RoleType[] {
   const pool: RoleType[] = [];
 
-  // Use Big Potato optimal distribution table
-  const dist = getOptimalRoleDistribution(playerCount);
+  const optimal = getOptimalRoleDistribution(playerCount);
+  const mongooses = settings.advancedRoles ? optimal.mongooses : 0;
 
-  let snakes = dist.snakes;
-  const mongooses = settings.advancedRoles ? dist.mongooses : 0;
+  // Manager-configured snake count, clamped to a valid pool for this lobby size
+  const maxSnakes = Math.max(1, playerCount - mongooses - 1);
+  let snakes = Math.min(Math.max(1, settings.roleDistribution.snakes), maxSnakes);
   let humans = playerCount - snakes - mongooses;
 
   if (humans < 1) {
-    snakes = Math.max(1, Math.floor(playerCount / 3));
+    snakes = Math.max(1, playerCount - mongooses - 1);
     humans = playerCount - snakes - mongooses;
   }
 
@@ -55,23 +56,26 @@ export function checkWinCondition(
   totalRounds: number,
   currentRound: number
 ): 'snakes' | 'humans' | null {
-  const alive = players.filter((p) => p.isAlive && !p.isSpectator);
+  const active = players.filter((p) => !p.isSpectator);
+  const alive = active.filter((p) => p.isAlive);
   const aliveSnakes = alive.filter((p) => roles.get(p.id)?.type === 'snake');
   const aliveHumans = alive.filter((p) => roles.get(p.id)?.type !== 'snake');
 
   if (aliveSnakes.length === 0) return 'humans';
-  if (aliveSnakes.length >= aliveHumans.length) return 'snakes';
 
-  // After all rounds with no more eliminations, compare scores
-  if (currentRound > totalRounds) {
-    const snakeScore = players
+  // After all rounds, team with the higher total score wins (ties favor snakes)
+  if (currentRound >= totalRounds) {
+    const snakeScore = active
       .filter((p) => roles.get(p.id)?.type === 'snake')
       .reduce((s, p) => s + p.score, 0);
-    const humanScore = players
+    const humanScore = active
       .filter((p) => roles.get(p.id)?.type !== 'snake')
       .reduce((s, p) => s + p.score, 0);
     return snakeScore >= humanScore ? 'snakes' : 'humans';
   }
+
+  // Mid-game elimination parity (when elimination voting is active)
+  if (aliveSnakes.length >= aliveHumans.length) return 'snakes';
 
   return null;
 }

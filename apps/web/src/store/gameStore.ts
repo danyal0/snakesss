@@ -55,7 +55,7 @@ interface GameStore {
   setConnected: (v: boolean, id?: string) => void;
   setGameState: (s: GameState) => void;
   patchGameState: (p: Partial<GameState>) => void;
-  setMyRole: (r: Role) => void;
+  setMyRole: (role: Role, showReveal?: boolean) => void;
   setSnakeAnswer: (a: AnswerIndex | null) => void;
   setQuizReveal: (answers: PlayerAnswer[], correctIndex: AnswerIndex, scores: RoundScore[]) => void;
   addMessage: (m: ChatMessage) => void;
@@ -116,11 +116,10 @@ export const useGameStore = create<GameStore>()(
     patchGameState: (p) =>
       set((st) => ({ gameState: st.gameState ? { ...st.gameState, ...p } : null })),
 
-    setMyRole: (role) =>
+    setMyRole: (role, showReveal = false) =>
       set((st) => ({
         myRole: role,
-        // Only show reveal if we didn't have a role before (first time)
-        showRoleReveal: !st.myRole,
+        showRoleReveal: showReveal || !st.myRole,
       })),
 
     setSnakeAnswer: (a) => set({ snakeAnswer: a }),

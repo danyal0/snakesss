@@ -6,7 +6,6 @@ import {
   CreateRoomPayload,
   GamePhase,
   AnswerIndex,
-  getOptimalRoleDistribution,
 } from '@snakesss/shared-types';
 import { buildVoteTally, stripAnswerRoles } from '@snakesss/game-engine';
 import { RoomManager } from './RoomManager';
@@ -183,18 +182,6 @@ export function registerSocketHandlers(
       if (!player?.isRoomManager) {
         socket.emit('error', 'Only the room manager can start the game');
         return;
-      }
-
-      // Auto-fix role distribution to be valid before starting
-      const currentState = engine.getState();
-      const activePlayers = currentState.players.filter((p) => !p.isSpectator && p.isConnected);
-      if (activePlayers.length >= 3) {
-        // Ensure role distribution is sane (won't exceed player count)
-        const optimal = getOptimalRoleDistribution(activePlayers.length);
-        engine.updateSettings({
-          roleDistribution: optimal,
-          advancedRoles: currentState.settings.advancedRoles,
-        });
       }
 
       const result = engine.startGame();
@@ -512,6 +499,7 @@ async function handlePhaseTransition(
         leaderboard.recordGame({ players: finalState.players, winner });
       } else {
         engine.nextRound();
+        emitPrivateRoles(roomId, io, roomManager);
         await engine.transitionToQuestion();
         // Notify snakes of new correct answer
         const nextState = engine.getState();

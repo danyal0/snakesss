@@ -108,12 +108,7 @@ export function useSocketListeners(): void {
     });
 
     socket.on('player:role', (role) => {
-      const store = useGameStore.getState();
-      const hadRole = !!store.myRole;
-      store.setMyRole(role);
-      if (hadRole) {
-        useGameStore.setState({ showRoleReveal: false });
-      }
+      useGameStore.getState().setMyRole(role, true);
     });
 
     socket.on('quiz:question', (_question, snakeAnswer) => {

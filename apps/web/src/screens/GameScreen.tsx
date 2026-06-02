@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import clsx from 'clsx';
 import type { GameState, Player, VoteChoice } from '@snakesss/shared-types';
 import { ChatPanel } from '../components/game/ChatPanel';
@@ -295,7 +295,13 @@ export function GameScreen({ gameState }: GameScreenProps) {
 
           {/* Standard tabbed phases */}
           {!isFullScreenPhase && gameState.phase !== 'scores' && (
-            <div className="flex flex-col flex-1 min-h-0" onTouchStart={gameSwipe.onTouchStart} onTouchEnd={gameSwipe.onTouchEnd}>
+            <div
+              className="flex flex-col flex-1 min-h-0"
+              onTouchStart={gameSwipe.onTouchStart}
+              onTouchMove={gameSwipe.onTouchMove}
+              onTouchEnd={gameSwipe.onTouchEnd}
+              onTouchCancel={gameSwipe.onTouchCancel}
+            >
               <div className="flex border-b border-white/8 flex-shrink-0">
                 {(['players', 'chat', 'vote'] as ActivePanel[]).map((panel) => (
                   <button
@@ -329,58 +335,58 @@ export function GameScreen({ gameState }: GameScreenProps) {
                 ))}
               </div>
 
-              {/* Panel content */}
-              <div className="flex-1 min-h-0">
-                <AnimatePresence mode="wait">
-                  {activePanel === 'players' && gameState.phase === 'discussion' && gameState.currentQuestion && (
-                    <motion.div key="debate-options" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full min-h-0">
+              {/* Swipeable panel carousel */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <div
+                  className="flex h-full"
+                  style={{
+                    transform: `translateX(calc(-${gameSwipe.activeIndex * 100}% + ${gameSwipe.dragOffset}px))`,
+                    transition: gameSwipe.isDragging ? 'none' : 'transform 0.25s ease-out',
+                  }}
+                >
+                  <div className="w-full h-full flex-shrink-0 min-h-0">
+                    {gameState.phase === 'discussion' && gameState.currentQuestion ? (
                       <QuestionOptions question={gameState.currentQuestion} mode="discussion" phaseEndsAt={gameState.phaseEndsAt} timerLabel="Debate" />
-                    </motion.div>
-                  )}
-                  {activePanel === 'players' && gameState.phase !== 'discussion' && (
-                    <motion.div key="players" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full overflow-y-auto scrollbar-none p-3">
-                      <PlayerGrid
-                        players={gameState.players.filter((p) => !p.isSpectator)}
-                        myPlayerId={playerId}
-                        myRoleType={myRole?.type}
-                        voteCounts={voteCounts}
-                        canVote={false}
-                        onVote={handleVote}
-                        gameEnded={(gameState.phase as string) === 'ended'}
-                        showAnswers={gameState.phase === 'answer_reveal'}
-                        answersRevealed={gameState.answersRevealed}
-                        currentQuestion={gameState.currentQuestion}
-                      />
-                    </motion.div>
-                  )}
-
-                  {activePanel === 'chat' && (
-                    <motion.div key="chat" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
-                      <ChatPanel
-                        messages={gameState.chat}
-                        typingIndicators={typingIndicators}
-                        myPlayerId={playerId}
-                        canChat={canChat}
-                        onSend={handleSend}
-                        onTyping={sendTyping}
-                      />
-                    </motion.div>
-                  )}
-
-                  {activePanel === 'vote' && (
-                    <motion.div key="vote" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="h-full">
-                      {/* Eliminated players cannot vote — show spectator view */}
-                      {!isAlive && !isSpectator ? (
-                        <EliminatedSpectatorView
-                          gameState={gameState}
-                          votes={voteCounts}
+                    ) : (
+                      <div className="h-full overflow-y-auto scrollbar-none p-3">
+                        <PlayerGrid
+                          players={gameState.players.filter((p) => !p.isSpectator)}
+                          myPlayerId={playerId}
+                          myRoleType={myRole?.type}
+                          voteCounts={voteCounts}
+                          canVote={false}
+                          onVote={handleVote}
+                          gameEnded={(gameState.phase as string) === 'ended'}
+                          showAnswers={gameState.phase === 'answer_reveal'}
+                          answersRevealed={gameState.answersRevealed}
+                          currentQuestion={gameState.currentQuestion}
                         />
-                      ) : (
-                        <EmptyVote roundHistory={gameState.roundHistory} />
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="w-full h-full flex-shrink-0 min-h-0">
+                    <ChatPanel
+                      messages={gameState.chat}
+                      typingIndicators={typingIndicators}
+                      myPlayerId={playerId}
+                      canChat={canChat}
+                      onSend={handleSend}
+                      onTyping={sendTyping}
+                    />
+                  </div>
+
+                  <div className="w-full h-full flex-shrink-0 min-h-0">
+                    {!isAlive && !isSpectator ? (
+                      <EliminatedSpectatorView
+                        gameState={gameState}
+                        votes={voteCounts}
+                      />
+                    ) : (
+                      <EmptyVote roundHistory={gameState.roundHistory} />
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
