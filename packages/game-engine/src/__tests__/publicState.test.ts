@@ -27,6 +27,7 @@ function baseState(overrides: Partial<GameState> = {}): GameState {
     roundHistory: [],
     chat: [],
     winner: null,
+    winnerPlayerIds: null,
     settings: DEFAULT_ROOM_SETTINGS,
     timeline: [],
     phaseEndsAt: null,

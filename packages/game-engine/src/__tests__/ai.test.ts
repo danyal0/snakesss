@@ -52,6 +52,7 @@ function makeGameState(players: Player[]): GameState {
     roundHistory: [],
     chat: [],
     winner: null,
+    winnerPlayerIds: null,
     settings: DEFAULT_ROOM_SETTINGS,
     timeline: [],
     phaseEndsAt: Date.now() + 60000,

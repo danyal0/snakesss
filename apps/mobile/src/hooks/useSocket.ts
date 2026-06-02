@@ -32,7 +32,7 @@ export function useSocket() {
     s.on('chat:message', (msg) => store.addMessage(msg));
     s.on('chat:typing', (ind) => store.setTyping(ind));
     s.on('vote:update', (voteCounts) => store.updateVoteTally(voteCounts));
-    s.on('game:ended', (winner) => store.setWinner(winner));
+    s.on('game:ended', (winner, _players, winnerPlayerIds) => store.setWinner(winner, winnerPlayerIds));
     s.on('phase:changed', (phase, endsAt) => store.patchGameState({ phase, phaseEndsAt: endsAt }));
 
     return () => {

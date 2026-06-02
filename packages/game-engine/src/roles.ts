@@ -63,21 +63,22 @@ export function checkWinCondition(
 
   if (aliveSnakes.length === 0) return 'humans';
 
-  // After all rounds, team with the higher total score wins (ties favor snakes)
-  if (currentRound >= totalRounds) {
-    const snakeScore = active
-      .filter((p) => roles.get(p.id)?.type === 'snake')
-      .reduce((s, p) => s + p.score, 0);
-    const humanScore = active
-      .filter((p) => roles.get(p.id)?.type !== 'snake')
-      .reduce((s, p) => s + p.score, 0);
-    return snakeScore >= humanScore ? 'snakes' : 'humans';
-  }
+  // Final round uses individual high-score winner, not team parity
+  if (currentRound >= totalRounds) return null;
 
   // Mid-game elimination parity (when elimination voting is active)
   if (aliveSnakes.length >= aliveHumans.length) return 'snakes';
 
   return null;
+}
+
+/** Returns player ids tied for the highest score (non-spectators only). */
+export function getHighestScorers(players: Player[]): string[] {
+  const active = players.filter((p) => !p.isSpectator);
+  if (active.length === 0) return [];
+
+  const maxScore = Math.max(...active.map((p) => p.score));
+  return active.filter((p) => p.score === maxScore).map((p) => p.id);
 }
 
 export function revealRole(role: Role): Role {

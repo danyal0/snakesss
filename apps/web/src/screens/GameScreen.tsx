@@ -108,6 +108,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
       <GameEndScreen
         gameState={gameState}
         winner={store.winner ?? gameState.winner}
+        winnerPlayerIds={store.winnerPlayerIds.length > 0 ? store.winnerPlayerIds : (gameState.winnerPlayerIds ?? [])}
         myPlayerId={playerId}
         onPlayAgain={() => { store.reset(); navigate('/'); }}
         onLeave={() => { store.reset(); navigate('/'); }}

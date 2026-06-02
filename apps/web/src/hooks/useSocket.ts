@@ -140,9 +140,14 @@ export function useSocketListeners(): void {
       useGameStore.getState().setRoundResult(result);
     });
 
-    socket.on('game:ended', (winner: WinCondition, players: Player[]) => {
-      useGameStore.getState().setWinner(winner);
-      useGameStore.getState().patchGameState({ players, phase: 'ended', winner });
+    socket.on('game:ended', (winner: WinCondition, players: Player[], winnerPlayerIds: string[]) => {
+      useGameStore.getState().setWinner(winner, winnerPlayerIds);
+      useGameStore.getState().patchGameState({
+        players,
+        phase: 'ended',
+        winner,
+        winnerPlayerIds,
+      });
     });
 
     socket.on('phase:changed', (phase, endsAt) => {

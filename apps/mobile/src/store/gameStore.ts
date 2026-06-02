@@ -20,7 +20,7 @@ interface MobileGameStore {
   addMessage: (m: ChatMessage) => void;
   updateVoteTally: (v: Record<string, string>) => void;
   setTyping: (t: TypingIndicator) => void;
-  setWinner: (w: WinCondition) => void;
+  setWinner: (w: WinCondition, _playerIds?: string[]) => void;
   setShowRoleReveal: (v: boolean) => void;
   reset: () => void;
 }

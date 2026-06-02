@@ -16,7 +16,7 @@ import {
   PlayerAnswer,
   RoundScore,
 } from '@snakesss/shared-types';
-import { assignRoles, checkWinCondition, revealRole, calculateRoundScores } from './roles';
+import { assignRoles, checkWinCondition, getHighestScorers, revealRole, calculateRoundScores } from './roles';
 import { buildRoundVotes } from './voting';
 import { generateId, generateRoomCode } from './utils';
 import { getRandomQuestion, generateAIQuestion } from './questions';
@@ -83,6 +83,7 @@ export class GameEngine {
       roundHistory: [],
       chat: [],
       winner: null,
+      winnerPlayerIds: null,
       settings,
       timeline: [],
       phaseEndsAt: null,
@@ -492,7 +493,11 @@ export class GameEngine {
     );
   }
 
-  endGame(winner: WinCondition): void {
+  getHighestScorers(): string[] {
+    return getHighestScorers(this.state.players);
+  }
+
+  endGame(winner: WinCondition, winnerPlayerIds: string[] | null = null): void {
     const allRoles: Player[] = this.state.players.map((p) => ({
       ...p,
       role: this.roleMap.get(p.id) ? revealRole(this.roleMap.get(p.id)!) : p.role,
@@ -502,12 +507,13 @@ export class GameEngine {
       ...this.state,
       phase: 'ended',
       winner,
+      winnerPlayerIds,
       endedAt: Date.now(),
       players: allRoles,
       phaseEndsAt: null,
     };
 
-    this.emit('game_ended', { winner });
+    this.emit('game_ended', { winner, winnerPlayerIds });
     this.clearPhaseTimer();
     this.notifyStateChange();
   }

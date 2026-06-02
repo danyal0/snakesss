@@ -1,5 +1,5 @@
 export { GameEngine } from './GameEngine';
-export { assignRoles, buildRolePool, checkWinCondition, revealRole, calculateRoundScores } from './roles';
+export { assignRoles, buildRolePool, checkWinCondition, getHighestScorers, revealRole, calculateRoundScores } from './roles';
 export { tallyVotes, resolveTie, buildRoundVotes } from './voting';
 export { generateId, generateRoomCode, shuffleArray, weightedRandom } from './utils';
 export { BotDecisionEngine, RuleBasedProvider, XAIProvider } from './ai/AIBot';

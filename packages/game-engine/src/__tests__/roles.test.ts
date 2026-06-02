@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildRolePool, assignRoles, checkWinCondition } from '../roles';
+import { buildRolePool, assignRoles, checkWinCondition, getHighestScorers } from '../roles';
 import type { Player, RoomSettings, AvatarEmoji } from '@snakesss/shared-types';
 import { DEFAULT_ROOM_SETTINGS } from '@snakesss/shared-types';
 
@@ -105,7 +105,7 @@ describe('checkWinCondition', () => {
     expect(checkWinCondition(players, roles, 6, 1)).toBe('snakes');
   });
 
-  it('uses team scores on the final round instead of parity', () => {
+  it('returns null on the final round (individual score decides)', () => {
     const players = [
       { ...makePlayer('s1'), score: 2 },
       { ...makePlayer('s2'), score: 2 },
@@ -118,8 +118,7 @@ describe('checkWinCondition', () => {
       ['h1', { type: 'human' as const, revealed: false }],
       ['h2', { type: 'human' as const, revealed: false }],
     ]);
-    // Final round with 2v2 alive — humans have higher score
-    expect(checkWinCondition(players, roles, 6, 6)).toBe('humans');
+    expect(checkWinCondition(players, roles, 6, 6)).toBe(null);
   });
 
   it('returns null when game continues', () => {
@@ -130,5 +129,33 @@ describe('checkWinCondition', () => {
       ['v2', { type: 'human' as const, revealed: false }],
     ]);
     expect(checkWinCondition(players, roles, 6, 1)).toBe(null);
+  });
+});
+
+describe('getHighestScorers', () => {
+  it('returns the player with the highest score', () => {
+    const players = [
+      { ...makePlayer('p1'), score: 4 },
+      { ...makePlayer('p2'), score: 9 },
+      { ...makePlayer('p3'), score: 2 },
+    ];
+    expect(getHighestScorers(players)).toEqual(['p2']);
+  });
+
+  it('returns all players tied for first', () => {
+    const players = [
+      { ...makePlayer('p1'), score: 9 },
+      { ...makePlayer('p2'), score: 9 },
+      { ...makePlayer('p3'), score: 2 },
+    ];
+    expect(getHighestScorers(players).sort()).toEqual(['p1', 'p2']);
+  });
+
+  it('ignores spectators', () => {
+    const players = [
+      { ...makePlayer('p1'), score: 5 },
+      { ...makePlayer('spec'), score: 99, isSpectator: true },
+    ];
+    expect(getHighestScorers(players)).toEqual(['p1']);
   });
 });

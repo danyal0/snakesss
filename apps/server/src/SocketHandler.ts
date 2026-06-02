@@ -478,9 +478,12 @@ async function handlePhaseTransition(
       if (winner) {
         engine.endGame(winner);
         const finalState = engine.getState();
-        io.to(`room:${roomId}`).emit('game:ended', winner, finalState.players);
-        // Record to persistent leaderboard immediately on game end
-        leaderboard.recordGame({ players: finalState.players, winner });
+        io.to(`room:${roomId}`).emit('game:ended', winner, finalState.players, finalState.winnerPlayerIds ?? []);
+        leaderboard.recordGame({
+          players: finalState.players,
+          winner,
+          winnerPlayerIds: finalState.winnerPlayerIds,
+        });
       } else {
         engine.transitionToScores();
       }
@@ -491,12 +494,11 @@ async function handlePhaseTransition(
       const scoresState = engine.getState();
       // Check if we've played all rounds
       if (scoresState.round >= scoresState.totalRounds) {
-        const winner = engine.evaluateWin() ?? 'humans';
-        engine.endGame(winner);
+        const winnerPlayerIds = engine.getHighestScorers();
+        engine.endGame(null, winnerPlayerIds);
         const finalState = engine.getState();
-        io.to(`room:${roomId}`).emit('game:ended', winner, finalState.players);
-        // Record to persistent leaderboard
-        leaderboard.recordGame({ players: finalState.players, winner });
+        io.to(`room:${roomId}`).emit('game:ended', null, finalState.players, winnerPlayerIds);
+        leaderboard.recordGame({ players: finalState.players, winner: null, winnerPlayerIds });
       } else {
         engine.nextRound();
         emitPrivateRoles(roomId, io, roomManager);

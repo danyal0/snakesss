@@ -44,6 +44,7 @@ interface GameStore {
   typingIndicators: TypingIndicator[];
   lastRoundResult: RoundVotes | null;
   winner: WinCondition;
+  winnerPlayerIds: string[];
   showRoleReveal: boolean;
   showEliminationReveal: boolean;
   eliminatedPlayer: Player | null;
@@ -64,7 +65,7 @@ interface GameStore {
   clearVoteState: () => void;
   setTyping: (t: TypingIndicator) => void;
   setRoundResult: (r: RoundVotes) => void;
-  setWinner: (w: WinCondition) => void;
+  setWinner: (w: WinCondition, playerIds?: string[]) => void;
   setLastSocketError: (msg: string | null) => void;
   setShowRoleReveal: (v: boolean) => void;
   setShowElimination: (v: boolean, player?: Player) => void;
@@ -90,6 +91,7 @@ export const useGameStore = create<GameStore>()(
     typingIndicators: [],
     lastRoundResult: null,
     winner: null,
+    winnerPlayerIds: [],
     lastSocketError: null,
     showRoleReveal: false,
     showEliminationReveal: false,
@@ -155,7 +157,7 @@ export const useGameStore = create<GameStore>()(
 
     setRoundResult: (r) => set({ lastRoundResult: r }),
 
-    setWinner: (w) => set({ winner: w }),
+    setWinner: (w, playerIds = []) => set({ winner: w, winnerPlayerIds: playerIds }),
 
     setLastSocketError: (msg) => set({ lastSocketError: msg }),
     setShowRoleReveal: (v) => set({ showRoleReveal: v }),
@@ -178,6 +180,7 @@ export const useGameStore = create<GameStore>()(
         typingIndicators: [],
         lastRoundResult: null,
         winner: null,
+        winnerPlayerIds: [],
         lastSocketError: null,
       showRoleReveal: false,
         showEliminationReveal: false,

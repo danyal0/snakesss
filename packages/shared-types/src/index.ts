@@ -242,6 +242,8 @@ export interface GameState {
   chat: ChatMessage[];
   // End
   winner: WinCondition;
+  /** Player id(s) with the highest score when the game ends after all rounds. */
+  winnerPlayerIds: string[] | null;
   settings: RoomSettings;
   timeline: GameEvent[];
   phaseEndsAt: number | null;
@@ -324,7 +326,7 @@ export interface ServerToClientEvents {
   'chat:typing': (indicator: TypingIndicator) => void;
   'vote:update': (voteCounts: Record<string, number>, castCount: number, totalVoters: number) => void;
   'round:result': (result: RoundVotes) => void;
-  'game:ended': (winner: WinCondition, scores: Player[]) => void;
+  'game:ended': (winner: WinCondition, scores: Player[], winnerPlayerIds: string[]) => void;
   'error': (message: string) => void;
   'room:list': (rooms: RoomSummary[]) => void;
   'admin:state': (state: AdminState) => void;

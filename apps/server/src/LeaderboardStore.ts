@@ -19,6 +19,7 @@ type StoredData = Record<string, StoredEntry>;
 export interface GameResult {
   players: Player[];
   winner: 'humans' | 'snakes' | null;
+  winnerPlayerIds?: string[] | null;
 }
 
 const DATA_DIR = process.env['DATA_DIR'] ?? path.join(process.cwd(), 'data');
@@ -66,18 +67,21 @@ export class LeaderboardStore {
   }
 
   recordGame(result: GameResult): void {
-    const { players, winner } = result;
+    const { players, winner, winnerPlayerIds } = result;
+    const topScorers = winnerPlayerIds ?? [];
 
     for (const player of players) {
-      if (player.isSpectator || player.isBot) continue; // only real human players
+      if (player.isSpectator || player.isBot) continue;
 
       const key = this.playerKey(player.username);
       const existing = this.data[key] ?? this.newEntry(player);
       const roleType = player.role?.type ?? 'human';
       const isSnakeGame = roleType === 'snake';
       const playerWon =
-        (winner === 'humans' && roleType !== 'snake') ||
-        (winner === 'snakes' && roleType === 'snake');
+        topScorers.length > 0
+          ? topScorers.includes(player.id)
+          : (winner === 'humans' && roleType !== 'snake') ||
+            (winner === 'snakes' && roleType === 'snake');
 
       this.data[key] = {
         ...existing,
