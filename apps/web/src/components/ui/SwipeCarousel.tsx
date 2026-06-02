@@ -45,7 +45,7 @@ export function SwipeCarousel({
   return (
     <div
       data-testid={testId}
-      className={clsx('overflow-hidden flex-1 min-h-0', className)}
+      className={clsx('overflow-hidden flex-1 min-h-0 touch-pan-y', className)}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}

@@ -18,8 +18,10 @@ export function RoomScreen() {
   const gameState = useGameStore((s) => s.gameState);
   const isConnected = useGameStore((s) => s.isConnected);
   const playerId = useGameStore((s) => s.playerId);
+  const lastSocketError = useGameStore((s) => s.lastSocketError);
   const [joinError, setJoinError] = useState('');
   const spectateAttempted = useRef(false);
+  const displayError = joinError || (loadSession(roomId ?? '') ? lastSocketError : '');
 
   useEffect(() => {
     if (!roomId || !isConnected) return;
@@ -30,34 +32,13 @@ export function RoomScreen() {
 
     if (registered) return;
 
-    const socket = getSocket();
-
     if (session) {
-      socket.emit(
-        'room:join',
-        {
-          roomId,
-          username: session.username,
-          avatar: session.avatar as AvatarEmoji,
-          asSpectator: false,
-        },
-        (result) => {
-          if ('error' in result) {
-            clearSession(roomId);
-            setJoinError(result.error);
-          } else {
-            applyRoomIdentity(
-              result,
-              roomId,
-              session.username,
-              session.avatar,
-              socket.id ?? null
-            );
-          }
-        }
-      );
+      // Rejoin with saved playerId is handled once by useSocket (connect → rejoinFromSession).
+      // Duplicating room:join here caused "Player already connected" after refresh.
       return;
     }
+
+    const socket = getSocket();
 
     if (!spectateAttempted.current) {
       spectateAttempted.current = true;
@@ -65,13 +46,13 @@ export function RoomScreen() {
     }
   }, [roomId, isConnected, gameState?.roomId, playerId]);
 
-  if (joinError) {
+  if (displayError) {
     return (
       <div data-testid="room-error" className="h-full app-bg flex flex-col items-center justify-center gap-6 p-6">
         <div className="text-5xl">🚫</div>
         <div className="text-center space-y-1">
           <p className="text-white font-semibold">Could not rejoin room</p>
-          <p className="text-white/50 text-sm">{joinError}</p>
+          <p className="text-white/50 text-sm">{displayError}</p>
         </div>
         <button
           onClick={() => navigate('/')}

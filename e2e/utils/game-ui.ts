@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 export async function dismissBlockingGameOverlays(page: Page): Promise<void> {
   const dismiss = page.getByRole('button', { name: /I Understand/i });
   if (await dismiss.isVisible().catch(() => false)) {
-    await dismiss.click();
+    await dismiss.click({ force: true, timeout: 5_000 }).catch(() => {});
     return;
   }
 

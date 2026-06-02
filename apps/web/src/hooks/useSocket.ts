@@ -57,6 +57,7 @@ function rejoinFromSession(socket: AppSocket, roomId: string): void {
       _joinInFlight = null;
       if ('error' in result) {
         console.warn('[Socket] rejoin failed:', result.error);
+        useGameStore.getState().setLastSocketError(result.error);
         return;
       }
       applyRoomIdentity(

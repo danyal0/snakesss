@@ -193,7 +193,11 @@ export class GameEngine {
 
     if (wasManager && this.state.phase !== 'ended') {
       const nextManager = this.state.players.find(
-        (p) => p.id !== id && p.isConnected && !p.isSpectator
+        (p) =>
+          p.id !== id &&
+          p.isConnected &&
+          !p.isSpectator &&
+          (this.state.phase !== 'lobby' || !p.isBot)
       );
       if (nextManager) {
         this.state = {

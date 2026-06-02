@@ -18,6 +18,24 @@ test.describe('Browser refresh & resume', () => {
     expect(['voting', 'discussion', 'question', 'dealing']).toContain(phase);
   });
 
+  test('manager refresh keeps lobby and room manager powers', async ({ page, e2eRoomId, lobbyPage }) => {
+    await expect(page.getByTestId('lobby-screen')).toBeVisible();
+    await expect(page.getByTestId('room-code')).toHaveText(e2eRoomId);
+    await lobbyPage.switchTab('players');
+    await expect(page.getByRole('button', { name: 'Kick' }).first()).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByTestId('lobby-screen')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('room-code')).toHaveText(e2eRoomId);
+    await expect(page.getByTestId('btn-start-game')).toBeEnabled({ timeout: 20_000 });
+
+    await lobbyPage.switchTab('settings');
+    await expect(page.getByRole('button', { name: /Save Settings/i })).toBeVisible();
+    await lobbyPage.switchTab('players');
+    await expect(page.getByRole('button', { name: 'Kick' }).first()).toBeVisible();
+    await expect(page.getByTestId('btn-start-game')).toBeEnabled({ timeout: 15_000 });
+  });
+
   test('refresh does not duplicate room code display', async ({ page, e2eRoomId }) => {
     await expect(page.getByTestId('lobby-screen')).toBeVisible();
     const codeBefore = await page.getByTestId('room-code').innerText();

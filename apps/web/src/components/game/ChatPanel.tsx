@@ -60,7 +60,7 @@ export function ChatPanel({
   return (
     <div data-testid="chat-panel" className="flex flex-col h-full">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-none space-y-2 p-3 min-h-0">
+      <div className="flex-1 overflow-y-auto scrollbar-none touch-pan-y overscroll-y-contain space-y-2 p-3 min-h-0">
         {messages.length === 0 && (
           <div
             data-testid="chat-empty-state"

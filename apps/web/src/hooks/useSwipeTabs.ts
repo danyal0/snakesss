@@ -1,10 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const SWIPE_THRESHOLD_PX = 48;
-const MAX_VERTICAL_DRIFT_PX = 80;
+const AXIS_LOCK_PX = 12;
+const HORIZONTAL_BIAS = 1.35;
+
+type GestureAxis = 'none' | 'horizontal' | 'vertical';
+
+function isVerticallyScrollable(el: HTMLElement): boolean {
+  const { overflowY } = getComputedStyle(el);
+  if (overflowY !== 'auto' && overflowY !== 'scroll') return false;
+  return el.scrollHeight > el.clientHeight + 1;
+}
+
+function findScrollableAncestor(target: EventTarget | null): HTMLElement | null {
+  let node = target instanceof HTMLElement ? target : null;
+  while (node) {
+    if (isVerticallyScrollable(node)) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
 
 /**
  * Touch swipe between ordered tabs with live drag preview (e.g. game players / chat / vote).
+ * Locks gesture axis so vertical scroll inside panels is not stolen by horizontal tab swipes.
  */
 export function useSwipeTabs<T extends string>(
   tabs: readonly T[],
@@ -12,6 +31,8 @@ export function useSwipeTabs<T extends string>(
   setActiveTab: (tab: T) => void
 ) {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const scrollableTouchTarget = useRef<HTMLElement | null>(null);
+  const gestureAxis = useRef<GestureAxis>('none');
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const activeTabRef = useRef(activeTab);
@@ -20,22 +41,28 @@ export function useSwipeTabs<T extends string>(
 
   const activeIndex = tabs.indexOf(activeTab);
 
-  /** Clear drag offset when tab changes programmatically (phase switch, round change). */
-  const resetDrag = useCallback(() => {
+  const resetGesture = useCallback(() => {
     touchStart.current = null;
+    scrollableTouchTarget.current = null;
+    gestureAxis.current = 'none';
     setIsDragging(false);
     setDragOffset(0);
   }, []);
 
+  /** Clear drag offset when tab changes programmatically (phase switch, round change). */
+  const resetDrag = resetGesture;
+
   useEffect(() => {
-    resetDrag();
-  }, [activeTab, resetDrag]);
+    resetGesture();
+  }, [activeTab, resetGesture]);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0];
     if (!t) return;
     touchStart.current = { x: t.clientX, y: t.clientY };
-    setIsDragging(true);
+    scrollableTouchTarget.current = findScrollableAncestor(e.target);
+    gestureAxis.current = 'none';
+    setIsDragging(false);
     setDragOffset(0);
   }, []);
 
@@ -48,10 +75,26 @@ export function useSwipeTabs<T extends string>(
 
       const dx = t.clientX - start.x;
       const dy = t.clientY - start.y;
-      if (Math.abs(dy) > MAX_VERTICAL_DRIFT_PX && Math.abs(dx) < Math.abs(dy)) return;
+
+      if (gestureAxis.current === 'none') {
+        if (Math.hypot(dx, dy) < AXIS_LOCK_PX) return;
+        const inScrollable = scrollableTouchTarget.current !== null;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        if (inScrollable) {
+          gestureAxis.current =
+            absDx > absDy * HORIZONTAL_BIAS ? 'horizontal' : 'vertical';
+        } else {
+          gestureAxis.current = absDx > absDy ? 'horizontal' : 'vertical';
+        }
+      }
+
+      if (gestureAxis.current === 'vertical') return;
 
       const idx = tabs.indexOf(activeTabRef.current);
       if (idx < 0) return;
+
+      setIsDragging(true);
 
       let offset = dx;
       if (idx === 0 && offset > 0) offset *= 0.35;
@@ -65,10 +108,12 @@ export function useSwipeTabs<T extends string>(
   const onTouchEnd = useCallback(
     (e: React.TouchEvent) => {
       const start = touchStart.current;
+      const axis = gestureAxis.current;
       touchStart.current = null;
+      gestureAxis.current = 'none';
       setIsDragging(false);
 
-      if (!start) {
+      if (!start || axis === 'vertical') {
         setDragOffset(0);
         return;
       }
@@ -80,11 +125,6 @@ export function useSwipeTabs<T extends string>(
       }
 
       const dx = t.clientX - start.x;
-      const dy = t.clientY - start.y;
-      if (Math.abs(dy) > MAX_VERTICAL_DRIFT_PX) {
-        setDragOffset(0);
-        return;
-      }
       if (Math.abs(dx) < SWIPE_THRESHOLD_PX) {
         setDragOffset(0);
         return;
@@ -108,10 +148,8 @@ export function useSwipeTabs<T extends string>(
   );
 
   const onTouchCancel = useCallback(() => {
-    touchStart.current = null;
-    setIsDragging(false);
-    setDragOffset(0);
-  }, []);
+    resetGesture();
+  }, [resetGesture]);
 
   return {
     onTouchStart,

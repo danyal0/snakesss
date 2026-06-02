@@ -367,7 +367,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                     {gameState.phase === 'discussion' && gameState.currentQuestion ? (
                       <QuestionOptions question={gameState.currentQuestion} mode="discussion" phaseEndsAt={gameState.phaseEndsAt} timerLabel="Debate" />
                     ) : (
-                      <div className="h-full overflow-y-auto scrollbar-none p-3">
+                      <div className="h-full overflow-y-auto scrollbar-none touch-pan-y overscroll-y-contain p-3">
                         <PlayerGrid
                           players={gameState.players.filter((p) => !p.isSpectator)}
                           myPlayerId={playerId}

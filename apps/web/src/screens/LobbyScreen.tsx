@@ -207,7 +207,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
           <div
             data-testid="lobby-panel-players"
             data-panel-visible={tab === 'players'}
-            className="h-full overflow-y-auto scrollbar-none px-4 py-3 space-y-2"
+            className="h-full overflow-y-auto scrollbar-none touch-pan-y overscroll-y-contain px-4 py-3 space-y-2"
           >
               {activePlayers.length === 0 && (
                 <div className="text-center py-8 text-white/40 text-sm">
@@ -304,7 +304,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
           <div
             data-testid="lobby-panel-bots"
             data-panel-visible={tab === 'bots'}
-            className="h-full overflow-y-auto scrollbar-none px-4 py-3 space-y-4"
+            className="h-full overflow-y-auto scrollbar-none touch-pan-y overscroll-y-contain px-4 py-3 space-y-4"
           >
               <p className="text-xs text-white/50 px-1">
                 Add AI bots to fill empty spots. Bots chat naturally, bluff, and vote like real players.
@@ -394,7 +394,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
           <div
             data-testid="lobby-panel-settings"
             data-panel-visible={tab === 'settings'}
-            className="h-full overflow-y-auto scrollbar-none px-4 py-3 space-y-4"
+            className="h-full overflow-y-auto scrollbar-none touch-pan-y overscroll-y-contain px-4 py-3 space-y-4"
           >
               {!isManager && (
                 <div className="glass rounded-2xl px-4 py-3 border border-yellow-500/20">

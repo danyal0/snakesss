@@ -109,12 +109,21 @@ export function registerSocketHandlers(
         const slot = engine.getState().players.find(
           (p) => p.id === rejoinPlayerId && !p.isSpectator
         );
-        if (slot?.isConnected) {
-          cb({ error: 'Player already connected in this room' });
-          return;
-        }
-        if (slot && !slot.isConnected) {
+        if (slot) {
           effectivePlayerId = rejoinPlayerId;
+          const oldSocketId = roomManager.getSocketId(roomId, rejoinPlayerId);
+          if (oldSocketId && oldSocketId !== socket.id) {
+            const oldSocket = io.sockets.sockets.get(oldSocketId);
+            if (oldSocket) {
+              const oldMeta = socketMeta.get(oldSocket);
+              if (oldMeta) {
+                oldMeta.roomId = undefined;
+                oldMeta.playerId = undefined;
+              }
+              oldSocket.disconnect(true);
+            }
+            roomManager.unregisterSocket(roomId, rejoinPlayerId);
+          }
           engine.reconnectPlayer(rejoinPlayerId, socket.id);
         }
       }
@@ -693,6 +702,10 @@ function handleDisconnect(
 ): void {
   const engine = roomManager.getEngine(roomId);
   if (!engine) return;
+
+  // Ignore stale socket after refresh: a newer socket already registered for this player.
+  const activeSocketId = roomManager.getSocketId(roomId, playerId);
+  if (activeSocketId && activeSocketId !== _socket.id) return;
 
   engine.removePlayer(playerId);
   roomManager.unregisterSocket(roomId, playerId);
