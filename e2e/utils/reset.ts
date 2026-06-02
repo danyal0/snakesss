@@ -1,11 +1,15 @@
 import type { Page } from '@playwright/test';
 
 export async function resetBrowserState(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    localStorage.clear();
-    sessionStorage.clear();
-    window.__SNAKESS_TEST__?.resetStore();
-  });
+  try {
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+      window.__SNAKESS_TEST__?.resetStore();
+    });
+  } catch {
+    // Page may be on about:blank during teardown
+  }
   await page.context().clearCookies();
 }
 

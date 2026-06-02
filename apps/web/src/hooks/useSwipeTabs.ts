@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const SWIPE_THRESHOLD_PX = 48;
 const MAX_VERTICAL_DRIFT_PX = 80;
@@ -14,8 +14,22 @@ export function useSwipeTabs<T extends string>(
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const activeTabRef = useRef(activeTab);
+
+  activeTabRef.current = activeTab;
 
   const activeIndex = tabs.indexOf(activeTab);
+
+  /** Clear drag offset when tab changes programmatically (phase switch, round change). */
+  const resetDrag = useCallback(() => {
+    touchStart.current = null;
+    setIsDragging(false);
+    setDragOffset(0);
+  }, []);
+
+  useEffect(() => {
+    resetDrag();
+  }, [activeTab, resetDrag]);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0];
@@ -36,17 +50,16 @@ export function useSwipeTabs<T extends string>(
       const dy = t.clientY - start.y;
       if (Math.abs(dy) > MAX_VERTICAL_DRIFT_PX && Math.abs(dx) < Math.abs(dy)) return;
 
-      const idx = tabs.indexOf(activeTab);
+      const idx = tabs.indexOf(activeTabRef.current);
       if (idx < 0) return;
 
-      // Rubber-band at the edges
       let offset = dx;
       if (idx === 0 && offset > 0) offset *= 0.35;
       if (idx === tabs.length - 1 && offset < 0) offset *= 0.35;
 
       setDragOffset(offset);
     },
-    [tabs, activeTab]
+    [tabs]
   );
 
   const onTouchEnd = useCallback(
@@ -77,7 +90,7 @@ export function useSwipeTabs<T extends string>(
         return;
       }
 
-      const idx = tabs.indexOf(activeTab);
+      const idx = tabs.indexOf(activeTabRef.current);
       if (idx < 0) {
         setDragOffset(0);
         return;
@@ -91,7 +104,7 @@ export function useSwipeTabs<T extends string>(
 
       setDragOffset(0);
     },
-    [tabs, activeTab, setActiveTab]
+    [tabs, setActiveTab]
   );
 
   const onTouchCancel = useCallback(() => {
@@ -107,6 +120,7 @@ export function useSwipeTabs<T extends string>(
     onTouchCancel,
     dragOffset,
     isDragging,
-    activeIndex,
+    activeIndex: activeIndex < 0 ? 0 : activeIndex,
+    resetDrag,
   };
 }

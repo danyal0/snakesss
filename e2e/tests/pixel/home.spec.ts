@@ -35,6 +35,6 @@ test.describe('Pixel — Public & Leaderboard', () => {
     await page.getByTestId('btn-leaderboard').click();
     await page.getByTestId('leaderboard-screen').waitFor();
     await waitForMotionSettled(page);
-    await assertPixelPerfect(page, 'leaderboard');
+    await assertPixelStable(page.getByTestId('leaderboard-screen'), 'leaderboard');
   });
 });

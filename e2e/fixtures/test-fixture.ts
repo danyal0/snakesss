@@ -45,6 +45,7 @@ export const test = base.extend<Fixtures>({
     await page.getByTestId('lobby-tab-bots').click();
     await page.getByRole('button', { name: /Chaotic/i }).click();
     await page.getByRole('button', { name: /Aggressive/i }).click();
+    await page.getByTestId('lobby-tab-players').click();
     await use(roomId);
   },
 });

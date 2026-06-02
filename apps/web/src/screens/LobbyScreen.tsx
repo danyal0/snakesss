@@ -7,7 +7,11 @@ import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import { AvatarDisplay } from '../components/ui/Avatar';
 import { useSocket } from '../hooks/useSocket';
+import { useSwipeTabs } from '../hooks/useSwipeTabs';
 import { useGameStore } from '../store/gameStore';
+
+const LOBBY_TABS = ['players', 'bots', 'settings'] as const;
+type LobbyTab = (typeof LOBBY_TABS)[number];
 
 interface LobbyScreenProps {
   gameState: GameState;
@@ -28,7 +32,13 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
   const me = gameState.players.find((p) => p.id === playerId);
   const isManager = me?.isRoomManager ?? false;
 
-  const [tab, setTab] = useState<'players' | 'bots' | 'settings'>('players');
+  const [tab, setTab] = useState<LobbyTab>('players');
+  const {
+    activeIndex: lobbyActiveIndex,
+    dragOffset: lobbyDragOffset,
+    isDragging: lobbyIsDragging,
+    ...lobbySwipeHandlers
+  } = useSwipeTabs(LOBBY_TABS, tab, setTab);
   const [settings, setSettings] = useState<RoomSettings>(gameState.settings);
   const [copied, setCopied] = useState(false);
   const [botLoading, setBotLoading] = useState<BotPersona | null>(null);
@@ -152,11 +162,12 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
 
       {/* Tabs */}
       <div className="flex-shrink-0 flex border-b border-white/10 px-4">
-        {(['players', 'bots', 'settings'] as const).map((t) => (
+        {LOBBY_TABS.map((t) => (
           <button
             key={t}
             data-testid={`lobby-tab-${t}`}
             onClick={() => setTab(t)}
+            type="button"
             className={clsx(
               'flex-1 py-2.5 text-sm font-medium relative transition-colors',
               tab === t ? 'text-white' : 'text-white/40 hover:text-white/70'
@@ -175,19 +186,27 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
         ))}
       </div>
 
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto scrollbar-none px-4 py-3">
-        <AnimatePresence mode="wait">
-
-          {/* PLAYERS TAB */}
-          {tab === 'players' && (
-            <motion.div
-              key="players"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-2"
-            >
+      {/* Tab content — swipeable carousel (players / bots / settings) */}
+      <div
+        className="flex-1 min-h-0 overflow-hidden flex flex-col"
+        onTouchStart={lobbySwipeHandlers.onTouchStart}
+        onTouchMove={lobbySwipeHandlers.onTouchMove}
+        onTouchEnd={lobbySwipeHandlers.onTouchEnd}
+        onTouchCancel={lobbySwipeHandlers.onTouchCancel}
+        data-active-tab={tab}
+        data-carousel-index={lobbyActiveIndex}
+      >
+        <div
+          className="flex flex-1 min-h-0"
+          style={{
+            transform: `translateX(calc(-${lobbyActiveIndex * 100}% + ${lobbyDragOffset}px))`,
+            transition: lobbyIsDragging ? 'none' : 'transform 0.25s ease-out',
+          }}
+        >
+          <div
+            data-testid="lobby-panel-players"
+            className="w-full flex-shrink-0 overflow-y-auto scrollbar-none px-4 py-3 space-y-2"
+          >
               {activePlayers.length === 0 && (
                 <div className="text-center py-8 text-white/40 text-sm">
                   Waiting for players…
@@ -278,18 +297,12 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   </p>
                 </div>
               )}
-            </motion.div>
-          )}
+          </div>
 
-          {/* BOTS TAB */}
-          {tab === 'bots' && (
-            <motion.div
-              key="bots"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-4"
-            >
+          <div
+            data-testid="lobby-panel-bots"
+            className="w-full flex-shrink-0 overflow-y-auto scrollbar-none px-4 py-3 space-y-4"
+          >
               <p className="text-xs text-white/50 px-1">
                 Add AI bots to fill empty spots. Bots chat naturally, bluff, and vote like real players.
               </p>
@@ -373,18 +386,12 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   Only the room manager can add bots
                 </div>
               )}
-            </motion.div>
-          )}
+          </div>
 
-          {/* SETTINGS TAB */}
-          {tab === 'settings' && (
-            <motion.div
-              key="settings"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-4"
-            >
+          <div
+            data-testid="lobby-panel-settings"
+            className="w-full flex-shrink-0 overflow-y-auto scrollbar-none px-4 py-3 space-y-4"
+          >
               {!isManager && (
                 <div className="glass rounded-2xl px-4 py-3 border border-yellow-500/20">
                   <p className="text-xs text-yellow-400/70 text-center">
@@ -490,9 +497,8 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   Save Settings
                 </Button>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+          </div>
+        </div>
       </div>
 
       {/* Bottom CTA */}
