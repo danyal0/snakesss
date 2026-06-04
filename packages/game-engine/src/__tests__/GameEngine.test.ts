@@ -51,6 +51,23 @@ describe('GameEngine', () => {
     expect(state.players.filter((p) => p.id === 'manager1').length).toBe(1);
   });
 
+  it('returnToLobby resets an ended game to lobby', () => {
+    engine.addPlayer('p2', 'Bob', '🐺' as AvatarEmoji, false);
+    engine.addPlayer('p3', 'Carol', '🦅' as AvatarEmoji, false);
+    engine.startGame();
+    vi.runAllTimers();
+    engine.endGame('humans');
+    expect(engine.getState().phase).toBe('ended');
+
+    const back = engine.returnToLobby();
+    expect(back.success).toBe(true);
+    const state = engine.getState();
+    expect(state.phase).toBe('lobby');
+    expect(state.round).toBe(0);
+    expect(state.winner).toBeNull();
+    expect(state.players.every((p) => p.score === 0)).toBe(true);
+  });
+
   it('requires 3 players to start', () => {
     const result = engine.startGame();
     expect(result.success).toBe(false);

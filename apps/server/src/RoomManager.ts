@@ -37,8 +37,12 @@ interface CompletedGame {
   startedAt: number;
 }
 
+/** Keep empty or finished rooms in memory so players can rejoin / play again. */
+export const ROOM_CLOSE_DELAY_MS = 60 * 60 * 1000;
+
 export class RoomManager {
   private rooms = new Map<string, RoomEntry>();
+  private roomCloseTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private completedGames: CompletedGame[] = [];
   private testSeed = '0';
   private aiProvider = this.buildProvider();
@@ -100,6 +104,7 @@ export class RoomManager {
     });
 
     const roomId = engine.getRoomId();
+    this.cancelScheduledClose(roomId);
     this.rooms.set(roomId, {
       engine,
       botEngine,
@@ -109,6 +114,23 @@ export class RoomManager {
     });
 
     return roomId;
+  }
+
+  scheduleRoomClose(roomId: string, delayMs = ROOM_CLOSE_DELAY_MS): void {
+    this.cancelScheduledClose(roomId);
+    const timer = setTimeout(() => {
+      this.roomCloseTimers.delete(roomId);
+      if (this.rooms.has(roomId)) this.closeRoom(roomId);
+    }, delayMs);
+    this.roomCloseTimers.set(roomId, timer);
+  }
+
+  cancelScheduledClose(roomId: string): void {
+    const timer = this.roomCloseTimers.get(roomId);
+    if (timer) {
+      clearTimeout(timer);
+      this.roomCloseTimers.delete(roomId);
+    }
   }
 
   getRoom(roomId: string): RoomEntry | undefined {
@@ -176,6 +198,7 @@ export class RoomManager {
   }
 
   closeRoom(roomId: string): void {
+    this.cancelScheduledClose(roomId);
     const room = this.rooms.get(roomId);
     if (room) {
       const state = room.engine.getState();

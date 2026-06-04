@@ -61,6 +61,7 @@ function rejoinFromSession(socket: AppSocket, roomId: string): void {
       if ('error' in result) {
         console.warn('[Socket] rejoin failed:', result.error);
         useGameStore.getState().setLastSocketError(result.error);
+        if (/room not found/i.test(result.error)) return;
         return;
       }
       applyRoomIdentity(
@@ -159,6 +160,17 @@ export function useSocketListeners(): void {
     socket.on('phase:changed', (phase, endsAt) => {
       const store = useGameStore.getState();
       store.patchGameState({ phase, phaseEndsAt: endsAt });
+      if (phase === 'lobby') {
+        useGameStore.setState({
+          winner: null,
+          winnerPlayerIds: [],
+          showRoleReveal: false,
+          voteTally: {},
+          hasVoted: false,
+          myVoteTarget: null,
+          hasSubmittedAnswer: false,
+        });
+      }
       if (phase === 'voting') {
         store.clearVoteState();
         useGameStore.setState({ hasSubmittedAnswer: false, answerCount: 0 });
@@ -291,6 +303,34 @@ export function useSocket() {
     useGameStore.getState().reset();
   };
 
+  const playAgain = () =>
+    new Promise<void>((resolve, reject) => {
+      const roomId = useGameStore.getState().gameState?.roomId;
+      if (!roomId) {
+        reject(new Error('No active room'));
+        return;
+      }
+      socket.emit('room:play_again', (result) => {
+        if (result && 'error' in result) {
+          reject(new Error(result.error));
+          return;
+        }
+        useGameStore.setState({
+          winner: null,
+          winnerPlayerIds: [],
+          showRoleReveal: false,
+          showEliminationReveal: false,
+          eliminatedPlayer: null,
+          voteTally: {},
+          hasVoted: false,
+          myVoteTarget: null,
+          hasSubmittedAnswer: false,
+          lastSocketError: null,
+        });
+        resolve();
+      });
+    });
+
   const submitAnswer = (choice: VoteChoice) => {
     const payload =
       choice === 'snake' ? { snakeVote: true } : { answerIndex: choice as AnswerIndex };
@@ -321,5 +361,6 @@ export function useSocket() {
     kickPlayerFromRoom,
     submitAnswer,
     leaveRoom,
+    playAgain,
   };
 }
