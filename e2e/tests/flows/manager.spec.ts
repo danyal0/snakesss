@@ -1,10 +1,22 @@
 import { test, expect } from '../../fixtures/test-fixture';
 
 test.describe('Room manager flows', () => {
+  test('manager sees question category input on settings tab', async ({ page, homePage, lobbyPage }) => {
+    await homePage.goto();
+    await homePage.openCreateRoom('TopicMgr');
+    await lobbyPage.expectQuestionCategoryVisible();
+    await lobbyPage.selectQuestionTopicPreset('Science');
+    await expect(page.getByTestId('lobby-question-topic-input')).toHaveValue('Science');
+    await lobbyPage.setQuestionTopic('World capitals');
+    await expect(page.getByTestId('lobby-question-topic-input')).toHaveValue('World capitals');
+    await expect(page.getByTestId('lobby-ai-questions-toggle')).toBeVisible();
+  });
+
   test('manager can configure settings and start', async ({ page, homePage, lobbyPage }) => {
     await homePage.goto();
     await homePage.openCreateRoom('Manager');
     await lobbyPage.switchTab('settings');
+    await lobbyPage.expectQuestionCategoryVisible();
     await expect(page.getByRole('button', { name: /Save Settings/i })).toBeVisible();
     await lobbyPage.switchTab('bots');
     await lobbyPage.addBot('aggressive');
