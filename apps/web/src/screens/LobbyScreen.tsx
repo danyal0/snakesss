@@ -55,16 +55,28 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
   const humans = activePlayers.filter((p) => !p.isBot);
   const canStart = activePlayers.length >= 3 && isManager;
 
-  const copyRoomCode = () => {
-    navigator.clipboard.writeText(gameState.roomId).catch(() => {});
+  const roomLink = `${window.location.origin}/room/${gameState.roomId}`;
+
+  const copyRoomLink = () => {
+    navigator.clipboard.writeText(roomLink).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const copyLink = () => {
-    navigator.clipboard.writeText(`${window.location.origin}/room/${gameState.roomId}`).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const shareRoomLink = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Snakesss',
+          text: `Join my Snakesss room (${gameState.roomId})`,
+          url: roomLink,
+        });
+        return;
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return;
+      }
+    }
+    copyRoomLink();
   };
 
   const handleAddBot = async (persona: BotPersona) => {
@@ -124,33 +136,42 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
           <div className="w-16" />
         </div>
 
-        {/* Room code card */}
-        <div className="glass rounded-2xl px-4 py-3 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] text-white/40 uppercase tracking-widest mb-0.5">Room Code</p>
+        {/* Room code card — tap code to copy invite link */}
+        <div className="glass rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={copyRoomLink}
+            className="text-left min-w-0 flex-1 rounded-xl -m-1 p-1 hover:bg-white/5 transition-colors"
+            aria-label="Copy room invite link"
+          >
+            <p className="text-[10px] text-white/40 uppercase tracking-widest mb-0.5">
+              Room Code · tap to copy link
+            </p>
             <div className="flex items-center gap-2">
-              <span data-testid="room-code" className="text-2xl font-black tracking-[0.2em] font-mono text-white">
+              <span
+                data-testid="room-code"
+                className={clsx(
+                  'text-2xl font-black tracking-[0.2em] font-mono',
+                  copied ? 'text-green-400' : 'text-white'
+                )}
+              >
                 {gameState.roomId}
               </span>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={copyRoomCode}
-              className={clsx(
-                'glass-button rounded-xl px-3 py-2 text-xs font-medium transition-all',
-                copied ? 'text-green-400' : 'text-white/70'
+              {copied && (
+                <span data-testid="room-code-copied" className="text-xs text-green-400 font-medium">
+                  Link copied!
+                </span>
               )}
-            >
-              {copied ? '✓ Copied' : 'Copy'}
-            </button>
-            <button
-              onClick={copyLink}
-              className="glass-button rounded-xl px-3 py-2 text-xs font-medium text-white/70"
-            >
-              🔗 Link
-            </button>
-          </div>
+            </div>
+          </button>
+          <button
+            type="button"
+            data-testid="btn-share-link"
+            onClick={() => void shareRoomLink()}
+            className="glass-button rounded-xl px-3 py-2 text-xs font-medium text-white/70 flex-shrink-0"
+          >
+            Share Link
+          </button>
         </div>
 
         {/* Player count pills */}
