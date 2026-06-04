@@ -5,6 +5,7 @@ const AXIS_LOCK_PX = 12;
 const HORIZONTAL_BIAS = 1.35;
 
 type GestureAxis = 'none' | 'horizontal' | 'vertical';
+type Point = { x: number; y: number };
 
 function isVerticallyScrollable(el: HTMLElement): boolean {
   const { overflowY } = getComputedStyle(el);
@@ -21,9 +22,26 @@ function findScrollableAncestor(target: EventTarget | null): HTMLElement | null 
   return null;
 }
 
+function isSwipeDisabledTarget(target: EventTarget | null): boolean {
+  let node = target instanceof HTMLElement ? target : null;
+  while (node) {
+    if (node.dataset.noSwipe !== undefined) return true;
+    const tag = node.tagName;
+    if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+      return true;
+    }
+    if (tag === 'A' && node.hasAttribute('href')) return true;
+    if (node.getAttribute('role') === 'button' || node.getAttribute('role') === 'switch') {
+      return true;
+    }
+    node = node.parentElement;
+  }
+  return false;
+}
+
 /**
- * Touch swipe between ordered tabs with live drag preview (e.g. game question / chat).
- * Locks gesture axis so vertical scroll inside panels is not stolen by horizontal tab swipes.
+ * Touch + mouse swipe between ordered tabs with live drag preview.
+ * Touch uses touch handlers; mouse/pen uses pointer handlers (same axis lock rules).
  */
 export function useSwipeTabs<T extends string>(
   tabs: readonly T[],
@@ -32,9 +50,10 @@ export function useSwipeTabs<T extends string>(
   options?: { scrollableBias?: boolean }
 ) {
   const scrollableBias = options?.scrollableBias !== false;
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const gestureStart = useRef<Point | null>(null);
   const scrollableTouchTarget = useRef<HTMLElement | null>(null);
   const gestureAxis = useRef<GestureAxis>('none');
+  const pointerIdRef = useRef<number | null>(null);
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const activeTabRef = useRef(activeTab);
@@ -44,40 +63,42 @@ export function useSwipeTabs<T extends string>(
   const activeIndex = tabs.indexOf(activeTab);
 
   const resetGesture = useCallback(() => {
-    touchStart.current = null;
+    gestureStart.current = null;
     scrollableTouchTarget.current = null;
     gestureAxis.current = 'none';
+    pointerIdRef.current = null;
     setIsDragging(false);
     setDragOffset(0);
   }, []);
 
-  /** Clear drag offset when tab changes programmatically (phase switch, round change). */
   const resetDrag = resetGesture;
 
-  // Keep carousel transform aligned with the highlighted tab (tab tap, auto-switch, etc.)
   useEffect(() => {
     resetGesture();
   }, [activeTab, resetGesture]);
 
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    const t = e.touches[0];
-    if (!t) return;
-    touchStart.current = { x: t.clientX, y: t.clientY };
-    scrollableTouchTarget.current = findScrollableAncestor(e.target);
+  const beginGesture = useCallback((x: number, y: number, target: EventTarget | null) => {
+    if (isSwipeDisabledTarget(target)) {
+      gestureStart.current = null;
+      scrollableTouchTarget.current = null;
+      gestureAxis.current = 'none';
+      return false;
+    }
+    gestureStart.current = { x, y };
+    scrollableTouchTarget.current = findScrollableAncestor(target);
     gestureAxis.current = 'none';
     setIsDragging(false);
     setDragOffset(0);
+    return true;
   }, []);
 
-  const onTouchMove = useCallback(
-    (e: React.TouchEvent) => {
-      const start = touchStart.current;
+  const moveGesture = useCallback(
+    (x: number, y: number, preventDefault?: () => void) => {
+      const start = gestureStart.current;
       if (!start) return;
-      const t = e.touches[0];
-      if (!t) return;
 
-      const dx = t.clientX - start.x;
-      const dy = t.clientY - start.y;
+      const dx = x - start.x;
+      const dy = y - start.y;
 
       if (gestureAxis.current === 'none') {
         if (Math.hypot(dx, dy) < AXIS_LOCK_PX) return;
@@ -94,9 +115,7 @@ export function useSwipeTabs<T extends string>(
 
       if (gestureAxis.current === 'vertical') return;
 
-      if (gestureAxis.current === 'horizontal' && e.cancelable) {
-        e.preventDefault();
-      }
+      if (gestureAxis.current === 'horizontal') preventDefault?.();
 
       const idx = tabs.indexOf(activeTabRef.current);
       if (idx < 0) return;
@@ -112,12 +131,13 @@ export function useSwipeTabs<T extends string>(
     [tabs, scrollableBias]
   );
 
-  const onTouchEnd = useCallback(
-    (e: React.TouchEvent) => {
-      const start = touchStart.current;
+  const endGesture = useCallback(
+    (x: number) => {
+      const start = gestureStart.current;
       const axis = gestureAxis.current;
-      touchStart.current = null;
+      gestureStart.current = null;
       gestureAxis.current = 'none';
+      pointerIdRef.current = null;
       setIsDragging(false);
 
       if (!start || axis === 'vertical') {
@@ -125,13 +145,7 @@ export function useSwipeTabs<T extends string>(
         return;
       }
 
-      const t = e.changedTouches[0];
-      if (!t) {
-        setDragOffset(0);
-        return;
-      }
-
-      const dx = t.clientX - start.x;
+      const dx = x - start.x;
       if (Math.abs(dx) < SWIPE_THRESHOLD_PX) {
         setDragOffset(0);
         return;
@@ -156,15 +170,89 @@ export function useSwipeTabs<T extends string>(
     [tabs, setActiveTab]
   );
 
+  const onTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      beginGesture(t.clientX, t.clientY, e.target);
+    },
+    [beginGesture]
+  );
+
+  const onTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      moveGesture(t.clientX, t.clientY, () => {
+        if (e.cancelable) e.preventDefault();
+      });
+    },
+    [moveGesture]
+  );
+
+  const onTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const t = e.changedTouches[0];
+      endGesture(t?.clientX ?? gestureStart.current?.x ?? 0);
+    },
+    [endGesture]
+  );
+
   const onTouchCancel = useCallback(() => {
     resetGesture();
   }, [resetGesture]);
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType === 'touch' || e.button !== 0 || !e.isPrimary) return;
+      if (!beginGesture(e.clientX, e.clientY, e.target)) return;
+      pointerIdRef.current = e.pointerId;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    [beginGesture]
+  );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (pointerIdRef.current !== e.pointerId) return;
+      moveGesture(e.clientX, e.clientY, () => {
+        if (e.cancelable) e.preventDefault();
+      });
+    },
+    [moveGesture]
+  );
+
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (pointerIdRef.current !== e.pointerId) return;
+      endGesture(e.clientX);
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    },
+    [endGesture]
+  );
+
+  const onPointerCancel = useCallback(
+    (e: React.PointerEvent) => {
+      if (pointerIdRef.current !== e.pointerId) return;
+      resetGesture();
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    },
+    [resetGesture]
+  );
 
   return {
     onTouchStart,
     onTouchMove,
     onTouchEnd,
     onTouchCancel,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
     dragOffset,
     isDragging,
     activeIndex: activeIndex < 0 ? 0 : activeIndex,

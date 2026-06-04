@@ -12,13 +12,17 @@ export interface SwipeCarouselProps {
   onTouchMove?: (e: React.TouchEvent) => void;
   onTouchEnd?: (e: React.TouchEvent) => void;
   onTouchCancel?: (e: React.TouchEvent) => void;
+  onPointerDown?: (e: React.PointerEvent) => void;
+  onPointerMove?: (e: React.PointerEvent) => void;
+  onPointerUp?: (e: React.PointerEvent) => void;
+  onPointerCancel?: (e: React.PointerEvent) => void;
   testId?: string;
   children: React.ReactNode;
 }
 
 /**
  * Standard horizontal pager: fixed-width slides + translate3d track.
- * Drag offset follows the finger; release snaps via parent tab index.
+ * Drag offset follows touch or mouse; release snaps via parent tab index.
  */
 export function SwipeCarousel({
   activeIndex,
@@ -31,6 +35,10 @@ export function SwipeCarousel({
   onTouchMove,
   onTouchEnd,
   onTouchCancel,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
   testId,
   children,
 }: SwipeCarouselProps) {
@@ -74,12 +82,20 @@ export function SwipeCarousel({
     <div
       ref={viewportRef}
       data-testid={testId}
-      className={clsx('overflow-hidden flex-1 min-h-0 w-full', className)}
+      className={clsx(
+        'overflow-hidden flex-1 min-h-0 w-full',
+        isDragging ? 'cursor-grabbing select-none' : 'cursor-grab',
+        className
+      )}
       style={{ touchAction: 'pan-y', contain: 'layout' }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchCancel}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
     >
       <div
         className={clsx('flex h-full', trackClassName)}

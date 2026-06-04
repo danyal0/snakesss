@@ -449,10 +449,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                   slideCount={GAME_PANELS.length}
                   dragOffset={gameDragOffset}
                   isDragging={gameIsDragging}
-                  onTouchStart={gameSwipeHandlers.onTouchStart}
-                  onTouchMove={gameSwipeHandlers.onTouchMove}
-                  onTouchEnd={gameSwipeHandlers.onTouchEnd}
-                  onTouchCancel={gameSwipeHandlers.onTouchCancel}
+                  {...gameSwipeHandlers}
                 >
                   <div
                     data-testid="game-panel-question"

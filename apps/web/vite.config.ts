@@ -9,6 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       workbox: {
         navigateFallbackDenylist: [/^\/admin/],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
       },
       manifest: {
         name: 'Snakesss',
@@ -25,7 +28,6 @@ export default defineConfig({
     }),
   ],
   server: {
-    host: '127.0.0.1',
     port: 5173,
     proxy: {
       '/api': 'http://localhost:3001',
