@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import clsx from 'clsx';
 import type { AvatarEmoji } from '@snakesss/shared-types';
+import { triggerHaptic } from '../../utils/haptics';
 
 const AVATARS: AvatarEmoji[] = [
   '🐍', '🦊', '🐺', '🦅', '🐻', '🦁', '🐯', '🐮',
@@ -74,7 +75,10 @@ export function AvatarPicker({ value, onChange }: AvatarPickerProps) {
           key={emoji}
           whileTap={{ scale: 0.9 }}
           whileHover={{ scale: 1.15 }}
-          onClick={() => onChange(emoji)}
+          onClick={() => {
+            triggerHaptic('tap');
+            onChange(emoji);
+          }}
           className={clsx(
             'w-12 h-12 flex items-center justify-center rounded-xl text-2xl',
             'transition-all duration-150',

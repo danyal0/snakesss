@@ -11,6 +11,12 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
 }
 
+function hapticForVariant(variant: ButtonProps['variant'], haptic: HapticKind): HapticKind {
+  if (variant === 'danger') return 'warning';
+  if (variant === 'primary') return 'confirm';
+  return haptic;
+}
+
 export function Button({
   variant = 'secondary',
   size = 'md',
@@ -20,8 +26,14 @@ export function Button({
   className,
   disabled,
   onClick,
+  onPointerDown,
   ...props
 }: ButtonProps) {
+  const fireHaptic = () => {
+    if (disabled || loading) return;
+    triggerHaptic(hapticForVariant(variant, haptic));
+  };
+
   return (
     <motion.button
       whileTap={{ scale: 0.97 }}
@@ -41,12 +53,11 @@ export function Button({
         className
       )}
       disabled={disabled || loading}
+      onPointerDown={(e) => {
+        fireHaptic();
+        onPointerDown?.(e);
+      }}
       onClick={(e) => {
-        if (!disabled && !loading) {
-          triggerHaptic(
-            variant === 'danger' ? 'warning' : variant === 'primary' ? 'confirm' : haptic
-          );
-        }
         onClick?.(e);
       }}
       {...(props as React.ComponentProps<typeof motion.button>)}

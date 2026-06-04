@@ -1,4 +1,11 @@
 import { useGameStore } from './store/gameStore';
+import {
+  triggerHaptic,
+  getHapticLog,
+  clearHapticLog,
+  isHapticFeedbackAvailable,
+  type HapticKind,
+} from './utils/haptics';
 
 export interface SnakesssTestHarness {
   getStore: () => ReturnType<typeof useGameStore.getState>;
@@ -7,6 +14,10 @@ export interface SnakesssTestHarness {
   waitForAnimations: (ms?: number) => Promise<void>;
   advanceIdle: (ms: number) => Promise<void>;
   getInteractionMap: () => InteractionMapEntry[];
+  triggerHaptic: (kind?: HapticKind) => void;
+  getHapticLog: typeof getHapticLog;
+  clearHapticLog: typeof clearHapticLog;
+  isHapticFeedbackAvailable: typeof isHapticFeedbackAvailable;
   version: string;
 }
 
@@ -103,6 +114,10 @@ export function installTestHarness(): void {
       await new Promise((r) => setTimeout(r, ms));
     },
     getInteractionMap: collectInteractionMap,
+    triggerHaptic,
+    getHapticLog,
+    clearHapticLog,
+    isHapticFeedbackAvailable,
   };
 
   window.__SNAKESS_TEST__ = harness;
