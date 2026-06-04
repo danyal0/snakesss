@@ -185,7 +185,7 @@ export function ChatPanel({
               maxLength={280}
               placeholder="Say something..."
               className={clsx(
-                'flex-1 glass rounded-xl px-3 py-2.5 text-sm text-white',
+                'flex-1 glass rounded-xl px-3 py-2.5 text-base text-white',
                 'placeholder:text-white/30 outline-none',
                 'focus:border-white/30 transition-all'
               )}

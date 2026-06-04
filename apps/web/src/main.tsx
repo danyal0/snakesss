@@ -4,6 +4,9 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import './index.css';
 import { installTestHarness } from './testHarness';
+import { installPreventZoom } from './utils/preventZoom';
+
+installPreventZoom();
 
 if (import.meta.env.VITE_E2E === 'true') {
   installTestHarness();

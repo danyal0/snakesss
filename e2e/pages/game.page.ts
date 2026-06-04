@@ -7,7 +7,7 @@ export class GamePage {
     await this.page.getByTestId('game-screen').waitFor({ state: 'visible' });
   }
 
-  async switchTab(tab: 'players' | 'chat' | 'vote'): Promise<void> {
+  async switchTab(tab: 'question' | 'chat' | 'vote'): Promise<void> {
     await this.page.getByTestId(`game-tab-${tab}`).click();
   }
 
@@ -16,7 +16,7 @@ export class GamePage {
     const swipeArea = this.page.locator('[data-testid="game-screen"] .flex-col.flex-1').first();
     const box = await swipeArea.boundingBox();
     if (!box) {
-      await this.switchTab(direction === 'left' ? 'chat' : 'players');
+      await this.switchTab(direction === 'left' ? 'chat' : 'question');
       return;
     }
     const y = box.y + box.height / 2;

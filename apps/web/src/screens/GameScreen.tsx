@@ -10,8 +10,7 @@ import { GameEndScreen } from '../components/game/GameEndScreen';
 import { QuestionOptions } from '../components/game/QuestionOptions';
 import { AnswerVotePanel } from '../components/game/AnswerVotePanel';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
-import { SwipeCarousel } from '../components/ui/SwipeCarousel';
-import { GAME_PANELS, defaultPanelForPhase, type GamePanel } from '../utils/gamePanels';
+import { GAME_PANELS, defaultPanelForPhase, gamePanelLabel, type GamePanel } from '../utils/gamePanels';
 import { AnswerReveal } from '../components/game/AnswerReveal';
 import { Timer } from '../components/ui/Timer';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -43,11 +42,9 @@ export function GameScreen({ gameState }: GameScreenProps) {
   const myRole = store.myRole;
   const typingIndicators = store.typingIndicators;
   const hasVoted = selectHasVoted(store);
+  const gamePanelIndex = GAME_PANELS.indexOf(activePanel);
   const {
     resetDrag: resetGameSwipe,
-    activeIndex: gameActiveIndex,
-    dragOffset: gameDragOffset,
-    isDragging: gameIsDragging,
     ...gameSwipeHandlers
   } = useSwipeTabs(GAME_PANELS, activePanel, setActivePanel, { scrollableBias: false });
   const alivePlayers = selectAlivePlayers(store);
@@ -338,17 +335,18 @@ export function GameScreen({ gameState }: GameScreenProps) {
                     )}
                   >
                     <span className="relative">
-                      {panel === 'players' && '👥 Players'}
-                      {panel === 'chat' && (
-                        <>💬 Chat
+                      {panel === 'chat' ? (
+                        <>
+                          {gamePanelLabel('chat')}
                           {unreadCount > 0 && activePanel !== 'chat' && (
                             <span className="absolute -top-1 -right-4 w-4 h-4 bg-green-500 rounded-full text-[8px] flex items-center justify-center font-bold text-white">
                               {unreadCount > 9 ? '9+' : unreadCount}
                             </span>
                           )}
                         </>
+                      ) : (
+                        gamePanelLabel(panel)
                       )}
-                      {panel === 'vote' && '🗳️ Vote'}
                     </span>
                     {activePanel === panel && (
                       <motion.div layoutId="game-tab" className="absolute bottom-0 left-3 right-3 h-0.5 bg-green-400 rounded-full" />
@@ -357,31 +355,31 @@ export function GameScreen({ gameState }: GameScreenProps) {
                 ))}
               </div>
 
-              {/* Swipe carousel — correct % transform + live drag preview */}
+              {/* Single active panel — avoids carousel transform/tab desync on mobile */}
               <div
-                key={phaseRoundKey}
-                className="flex-1 min-h-0 flex flex-col"
+                key={`${phaseRoundKey}-${activePanel}`}
+                data-testid="game-carousel"
+                className="flex-1 min-h-0 flex flex-col touch-pan-y"
                 data-active-panel={activePanel}
-                data-carousel-index={gameActiveIndex}
+                data-carousel-index={gamePanelIndex < 0 ? 0 : gamePanelIndex}
+                onTouchStart={gameSwipeHandlers.onTouchStart}
+                onTouchMove={gameSwipeHandlers.onTouchMove}
+                onTouchEnd={gameSwipeHandlers.onTouchEnd}
+                onTouchCancel={gameSwipeHandlers.onTouchCancel}
               >
-                <SwipeCarousel
-                  testId="game-carousel"
-                  activeIndex={gameActiveIndex}
-                  slideCount={GAME_PANELS.length}
-                  dragOffset={gameDragOffset}
-                  isDragging={gameIsDragging}
-                  onTouchStart={gameSwipeHandlers.onTouchStart}
-                  onTouchMove={gameSwipeHandlers.onTouchMove}
-                  onTouchEnd={gameSwipeHandlers.onTouchEnd}
-                  onTouchCancel={gameSwipeHandlers.onTouchCancel}
-                >
+                {activePanel === 'question' && (
                   <div
-                    data-testid="game-panel-players"
-                    data-panel-visible={activePanel === 'players'}
-                    className="h-full min-h-0"
+                    data-testid="game-panel-question"
+                    data-panel-visible="true"
+                    className="h-full min-h-0 flex flex-col"
                   >
                     {gameState.phase === 'discussion' && gameState.currentQuestion ? (
-                      <QuestionOptions question={gameState.currentQuestion} mode="discussion" phaseEndsAt={gameState.phaseEndsAt} timerLabel="Debate" />
+                      <QuestionOptions
+                        question={gameState.currentQuestion}
+                        mode="discussion"
+                        phaseEndsAt={gameState.phaseEndsAt}
+                        timerLabel="Debate"
+                      />
                     ) : (
                       <div className="h-full overflow-y-auto scrollbar-none touch-pan-y overscroll-y-contain p-3">
                         <PlayerGrid
@@ -399,10 +397,12 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       </div>
                     )}
                   </div>
+                )}
 
+                {activePanel === 'chat' && (
                   <div
                     data-testid="game-panel-chat"
-                    data-panel-visible={activePanel === 'chat'}
+                    data-panel-visible="true"
                     className="h-full min-h-0"
                   >
                     <ChatPanel
@@ -414,10 +414,12 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       onTyping={sendTyping}
                     />
                   </div>
+                )}
 
+                {activePanel === 'vote' && (
                   <div
                     data-testid="game-panel-vote"
-                    data-panel-visible={activePanel === 'vote'}
+                    data-panel-visible="true"
                     className="h-full min-h-0"
                   >
                     {!isAlive && !isSpectator ? (
@@ -429,7 +431,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       <EmptyVote roundHistory={gameState.roundHistory} />
                     )}
                   </div>
-                </SwipeCarousel>
+                )}
               </div>
             </div>
           )}

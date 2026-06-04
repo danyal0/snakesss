@@ -13,12 +13,19 @@
     box-sizing: border-box;
   }
 
+  html {
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   html, body, #root {
     height: 100%;
     width: 100%;
     margin: 0;
     padding: 0;
     overflow: hidden;
+    touch-action: manipulation;
   }
 
   body {
@@ -27,6 +34,7 @@
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
       'Helvetica Neue', Arial, sans-serif;
     touch-action: manipulation;
+    overscroll-behavior: none;
   }
 
   /* Prevent iOS zoom on input focus (requires ≥16px) */

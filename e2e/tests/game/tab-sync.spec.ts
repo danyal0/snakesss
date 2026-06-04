@@ -118,8 +118,8 @@ test.describe('Game tab ↔ panel sync', () => {
   });
 
   test('manual tab clicks match visible panels', async ({ page }) => {
-    await page.getByTestId('game-tab-players').click();
-    await expectGameTabMatchesPanel(page, 'players');
+    await page.getByTestId('game-tab-question').click();
+    await expectGameTabMatchesPanel(page, 'question');
 
     await page.getByTestId('game-tab-chat').click();
     await expectGameTabMatchesPanel(page, 'chat');
@@ -154,10 +154,10 @@ test.describe('Game swipe on touch devices', () => {
     await expectGamePanelCenteredInCarousel(page, 'chat');
   });
 
-  test('swipe players → chat → vote panels stay visible after each release', async ({ page }) => {
-    await page.getByTestId('game-tab-players').click();
-    await expectGameTabMatchesPanel(page, 'players');
-    await expectGamePanelCenteredInCarousel(page, 'players');
+  test('swipe question → chat → vote panels stay visible after each release', async ({ page }) => {
+    await page.getByTestId('game-tab-question').click();
+    await expectGameTabMatchesPanel(page, 'question');
+    await expectGamePanelCenteredInCarousel(page, 'question');
 
     await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left');
     await expectGameTabMatchesPanel(page, 'chat');
@@ -174,9 +174,9 @@ test.describe('Game swipe on touch devices', () => {
     await expectGamePanelCenteredInCarousel(page, 'chat');
   });
 
-  test('discussion question stays in viewport on players tab after swipe', async ({ page }) => {
-    await page.getByTestId('game-tab-players').click();
-    await expectGameTabMatchesPanel(page, 'players');
+  test('discussion question stays visible on question tab after swipe', async ({ page }) => {
+    await page.getByTestId('game-tab-question').click();
+    await expectGameTabMatchesPanel(page, 'question');
 
     await expect(page.getByTestId('debate-question')).toBeVisible();
 
@@ -184,8 +184,13 @@ test.describe('Game swipe on touch devices', () => {
     await expectGameTabMatchesPanel(page, 'chat');
 
     await swipeHorizontal(page, page.getByTestId('game-carousel'), 'right');
-    await expectGameTabMatchesPanel(page, 'players');
+    await expectGameTabMatchesPanel(page, 'question');
     await expect(page.getByTestId('debate-question')).toBeVisible();
-    await expectGamePanelCenteredInCarousel(page, 'players');
+    await expectGamePanelCenteredInCarousel(page, 'question');
+  });
+
+  test('tab label shows Question not Players', async ({ page }) => {
+    await expect(page.getByTestId('game-tab-question')).toHaveText(/Question/i);
+    await expect(page.getByRole('button', { name: /Players/i })).toHaveCount(0);
   });
 });

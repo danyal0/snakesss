@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
-const GAME_PANELS = ['players', 'chat', 'vote'] as const;
+const GAME_PANELS = ['question', 'chat', 'vote'] as const;
 const LOBBY_PANELS = ['players', 'bots', 'settings'] as const;
 
 /** Assert highlighted tab index matches visible carousel panel (no desync). */
@@ -34,12 +34,10 @@ export async function expectGameTabMatchesPanel(
     'true'
   );
 
+  // Single-panel mount: inactive panels are not in the DOM
   for (const panel of GAME_PANELS) {
     if (panel === expectedTab) continue;
-    await expect(page.getByTestId(`game-panel-${panel}`)).toHaveAttribute(
-      'data-panel-visible',
-      'false'
-    );
+    await expect(page.getByTestId(`game-panel-${panel}`)).toHaveCount(0);
   }
 
   await expectGamePanelCenteredInCarousel(page, expectedTab);
