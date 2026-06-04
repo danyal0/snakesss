@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@snakesss/game-engine": "^1.0.0",
+    "@snakesss/identity": "^1.0.0",
     "@snakesss/shared-types": "^1.0.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",

@@ -214,6 +214,7 @@ export class RoomManager {
         });
         // Record to persistent leaderboard (only real human players)
         leaderboard.recordGame({
+          roomId,
           players: state.players,
           winner: state.winner as 'humans' | 'snakes' | null,
         });

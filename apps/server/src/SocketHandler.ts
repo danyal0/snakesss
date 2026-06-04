@@ -4,6 +4,7 @@ import {
   ServerToClientEvents,
   JoinRoomPayload,
   CreateRoomPayload,
+  JoinRoomMeta,
   GamePhase,
   AnswerIndex,
   VoiceSignalPayload,
@@ -12,6 +13,8 @@ import {
 import { buildVoteTally, stripAnswerRoles } from '@snakesss/game-engine';
 import { RoomManager } from './RoomManager';
 import { leaderboard } from './LeaderboardStore';
+import { identityStore, JoinIdentityContext } from './IdentityStore';
+import { fallbackIdentityClaims } from './identityFallback';
 import { clearRoomBotTimers, scheduleRoomBotTimeout } from './botTimers';
 import {
   startBotDiscussion,
@@ -25,6 +28,22 @@ type AdminSocket = AppSocket & { isAdmin?: boolean };
 interface SocketMeta {
   playerId?: string;
   roomId?: string;
+  identityHash?: string;
+  displayName?: string;
+}
+
+function socketJoinContext(socket: AppSocket): JoinIdentityContext {
+  const h = socket.handshake;
+  const forwarded = h.headers['x-forwarded-for'];
+  const ip =
+    (typeof forwarded === 'string' ? forwarded.split(',')[0]?.trim() : undefined) ??
+    (h.address as string | undefined) ??
+    '0.0.0.0';
+  return {
+    socketIp: ip,
+    country: h.headers['cf-ipcountry'] as string | undefined,
+    region: h.headers['x-vercel-ip-country-region'] as string | undefined,
+  };
 }
 
 const socketMeta = new WeakMap<AppSocket, SocketMeta>();
@@ -77,14 +96,24 @@ export function registerSocketHandlers(
 
     // ── Room: Create ────────────────────────────────────────────────────────
     socket.on('room:create', (_payload: CreateRoomPayload, cb) => {
-      const { username, avatar, settings, preferredRoomId } = _payload;
+      const { avatar, settings, preferredRoomId } = _payload;
+      const claims = _payload.identity ?? fallbackIdentityClaims(socket.id);
       const playerId = socket.id;
 
       let roomId: string;
+      const pendingRoomId = preferredRoomId?.toUpperCase() ?? 'PENDING';
+      const identityResult = identityStore.processJoin(
+        _payload.username,
+        pendingRoomId,
+        claims,
+        socketJoinContext(socket)
+      );
+      const displayName = identityResult.displayName;
+
       try {
         roomId = roomManager.createRoom(
           playerId,
-          username,
+          displayName,
           avatar,
           settings,
           preferredRoomId
@@ -94,9 +123,21 @@ export function registerSocketHandlers(
         socket.emit('error', (e as Error).message);
         return;
       }
+
+      identityStore.processJoin(
+        _payload.username,
+        roomId,
+        claims,
+        socketJoinContext(socket),
+        playerId
+      );
+      identityStore.linkPlayer(roomId, playerId, identityResult.identityHash);
+
       const meta = socketMeta.get(socket)!;
       meta.playerId = playerId;
       meta.roomId = roomId;
+      meta.identityHash = identityResult.identityHash;
+      meta.displayName = displayName;
 
       roomManager.registerSocket(roomId, playerId, socket.id);
       socket.join(`room:${roomId}`);
@@ -110,9 +151,10 @@ export function registerSocketHandlers(
 
     // ── Room: Join ──────────────────────────────────────────────────────────
     socket.on('room:join', (_payload: JoinRoomPayload, cb) => {
-      const { roomId, username, avatar, asSpectator } = _payload;
+      const { roomId, avatar, asSpectator } = _payload;
+      const claims = _payload.identity ?? fallbackIdentityClaims(socket.id);
 
-      if (roomManager.isBanned(roomId, undefined, username)) {
+      if (roomManager.isBanned(roomId, undefined, _payload.username)) {
         cb({ error: 'You are banned from this room' });
         return;
       }
@@ -120,9 +162,20 @@ export function registerSocketHandlers(
       const engine = roomManager.getEngine(roomId);
       if (!engine) { cb({ error: 'Room not found' }); return; }
 
-      // ── Reconnect: try to restore a disconnected player by username ──────
-      // When a player refreshes (new socket ID), match them by username so they
-      // keep their role, manager status, and score.
+      const identityResult = identityStore.processJoin(
+        _payload.username,
+        roomId,
+        claims,
+        socketJoinContext(socket),
+        _payload.playerId
+      );
+      const displayName = identityResult.displayName;
+      const joinMeta: JoinRoomMeta = {
+        displayName,
+        welcomeBack: identityResult.welcomeBack,
+        nameInUseMessage: identityResult.nameInUseMessage,
+      };
+
       let effectivePlayerId = socket.id;
       const rejoinPlayerId = _payload.playerId;
 
@@ -150,37 +203,69 @@ export function registerSocketHandlers(
       }
 
       if (effectivePlayerId === socket.id) {
+        const normalizedDisplay = displayName.toLowerCase().trim();
         const existingPlayer = engine.getState().players.find(
           (p) =>
-            p.username.toLowerCase().trim() === username.toLowerCase().trim() &&
+            p.username.toLowerCase().trim() === normalizedDisplay &&
             !p.isSpectator &&
             !p.isConnected
         );
 
-        if (existingPlayer) {
+        const linked = _payload.playerId
+          ? identityStore.getProfileForPlayer(roomId, _payload.playerId)
+          : null;
+        const canReclaimSlot =
+          !existingPlayer ||
+          !linked ||
+          linked.identityHash === identityResult.identityHash;
+
+        if (existingPlayer && canReclaimSlot) {
           effectivePlayerId = existingPlayer.id;
           engine.reconnectPlayer(existingPlayer.id, socket.id);
+        } else if (!existingPlayer) {
+          const result = engine.addPlayer(
+            socket.id,
+            displayName,
+            avatar,
+            asSpectator
+          );
+          if (!result.success) {
+            cb({ error: result.error ?? 'Failed to join' });
+            return;
+          }
         } else {
-          const result = engine.addPlayer(socket.id, username, avatar, asSpectator);
-          if (!result.success) { cb({ error: result.error ?? 'Failed to join' }); return; }
+          const result = engine.addPlayer(
+            socket.id,
+            displayName,
+            avatar,
+            asSpectator
+          );
+          if (!result.success) {
+            cb({ error: result.error ?? 'Failed to join' });
+            return;
+          }
         }
       }
 
-      if (roomManager.isBanned(roomId, effectivePlayerId, username)) {
+      if (roomManager.isBanned(roomId, effectivePlayerId, displayName)) {
         cb({ error: 'You are banned from this room' });
         return;
       }
 
+      identityStore.linkPlayer(roomId, effectivePlayerId, identityResult.identityHash);
+
       const meta = socketMeta.get(socket)!;
       meta.playerId = effectivePlayerId;
       meta.roomId = roomId;
+      meta.identityHash = identityResult.identityHash;
+      meta.displayName = displayName;
 
       roomManager.registerSocket(roomId, effectivePlayerId, socket.id);
       roomManager.cancelScheduledClose(roomId);
       socket.join(`room:${roomId}`);
 
       const state = engine.getPublicState();
-      cb(state);
+      cb(state, joinMeta);
       emitPublicState(roomId, io, roomManager);
 
       // Re-send private role to the (re)joining player
@@ -610,6 +695,7 @@ async function handlePhaseTransition(
         const finalState = engine.getState();
         io.to(`room:${roomId}`).emit('game:ended', winner, finalState.players, finalState.winnerPlayerIds ?? []);
         leaderboard.recordGame({
+          roomId,
           players: finalState.players,
           winner,
           winnerPlayerIds: finalState.winnerPlayerIds,
@@ -629,7 +715,12 @@ async function handlePhaseTransition(
         engine.endGame(null, winnerPlayerIds);
         const finalState = engine.getState();
         io.to(`room:${roomId}`).emit('game:ended', null, finalState.players, winnerPlayerIds);
-        leaderboard.recordGame({ players: finalState.players, winner: null, winnerPlayerIds });
+        leaderboard.recordGame({
+          roomId,
+          players: finalState.players,
+          winner: null,
+          winnerPlayerIds,
+        });
         roomManager.scheduleRoomClose(roomId);
       } else {
         engine.nextRound();
@@ -727,6 +818,19 @@ function handleDisconnect(
   // Ignore stale socket after refresh: a newer socket already registered for this player.
   const activeSocketId = roomManager.getSocketId(roomId, playerId);
   if (activeSocketId && activeSocketId !== _socket.id) return;
+
+  const player = engine.getState().players.find((p) => p.id === playerId);
+  const socketMetaEntry = socketMeta.get(_socket);
+  if (player && socketMetaEntry?.identityHash) {
+    identityStore.recordDisconnect(
+      roomId,
+      playerId,
+      player.username,
+      socketMetaEntry.displayName ?? player.username,
+      socketMetaEntry.identityHash,
+      engine.getState().phase
+    );
+  }
 
   engine.removePlayer(playerId);
   roomManager.unregisterSocket(roomId, playerId);

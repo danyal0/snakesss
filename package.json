@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=apps/server\" \"npm run dev --workspace=apps/web\" \"npm run dev --workspace=apps/admin\"",
-    "build": "npm run build --workspace=packages/shared-types && npm run build --workspace=packages/game-engine && npm run build --workspace=apps/server && npm run build --workspace=apps/web && npm run build --workspace=apps/admin",
+    "build": "npm run build --workspace=packages/shared-types && npm run build --workspace=packages/identity && npm run build --workspace=packages/game-engine && npm run build --workspace=apps/server && npm run build --workspace=apps/web && npm run build --workspace=apps/admin",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test:e2e": "playwright test --project=chromium-desktop",

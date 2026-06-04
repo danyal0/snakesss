@@ -280,12 +280,43 @@ export interface GameState {
 
 // ─── Socket Payloads ──────────────────────────────────────────────────────────
 
+/** Browser/device signals for lenient identity (hashed server-side). */
+export interface FingerprintSignals {
+  userAgent: string;
+  platform: string;
+  screenResolution: string;
+  timezone: string;
+  language: string;
+  webglVendorHash: string;
+  audioFingerprintHash: string;
+}
+
+export interface BehavioralSignals {
+  joinToActionDelayMs?: number;
+  inputCadenceMs?: number;
+  interactionRhythm?: number;
+}
+
+export interface IdentityClaims {
+  fingerprint: FingerprintSignals;
+  behavioral?: BehavioralSignals;
+  clientTimestamp?: number;
+}
+
 export interface JoinRoomPayload {
   roomId: string;
   username: string;
   avatar: AvatarEmoji;
   asSpectator: boolean;
   playerId?: string;
+  identity?: IdentityClaims;
+}
+
+/** Server join metadata — confidence stays server-side only. */
+export interface JoinRoomMeta {
+  displayName: string;
+  welcomeBack?: boolean;
+  nameInUseMessage?: string;
 }
 
 export interface CreateRoomPayload {
@@ -294,6 +325,7 @@ export interface CreateRoomPayload {
   settings?: Partial<RoomSettings>;
   /** Recreate a closed room with the same code (manager only, must be available). */
   preferredRoomId?: string;
+  identity?: IdentityClaims;
 }
 
 export interface SendMessagePayload {
@@ -335,7 +367,10 @@ export interface VoiceSpeakingPayload {
 
 export interface ClientToServerEvents {
   'room:create': (payload: CreateRoomPayload, cb: (roomId: string) => void) => void;
-  'room:join': (payload: JoinRoomPayload, cb: (state: GameState | { error: string }) => void) => void;
+  'room:join': (
+    payload: JoinRoomPayload,
+    cb: (state: GameState | { error: string }, meta?: JoinRoomMeta) => void
+  ) => void;
   'room:leave': () => void;
   'room:start': () => void;
   'room:settings:update': (payload: UpdateSettingsPayload) => void;

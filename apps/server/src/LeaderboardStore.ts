@@ -1,10 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import type { LeaderboardEntry, AvatarEmoji, Player } from '@snakesss/shared-types';
+import { identityStore } from './IdentityStore';
 
 interface StoredEntry {
   username: string;
   avatar: AvatarEmoji;
+  identityHash?: string;
   totalScore: number;
   gamesPlayed: number;
   gamesWon: number;
@@ -17,6 +19,7 @@ interface StoredEntry {
 type StoredData = Record<string, StoredEntry>;
 
 export interface GameResult {
+  roomId: string;
   players: Player[];
   winner: 'humans' | 'snakes' | null;
   winnerPlayerIds?: string[] | null;
@@ -67,14 +70,24 @@ export class LeaderboardStore {
   }
 
   recordGame(result: GameResult): void {
-    const { players, winner, winnerPlayerIds } = result;
+    const { players, winner, winnerPlayerIds, roomId } = result;
     const topScorers = winnerPlayerIds ?? [];
 
     for (const player of players) {
       if (player.isSpectator || player.isBot) continue;
 
-      const key = this.playerKey(player.username);
-      const existing = this.data[key] ?? this.newEntry(player);
+      const profile = identityStore.getProfileForPlayer(roomId, player.id);
+      const identityHash = profile?.identityHash;
+      const displayName = player.username;
+
+      const key = identityHash
+        ? `id:${identityHash}`
+        : this.playerKey(displayName);
+      const legacyKey = this.playerKey(displayName);
+      const existing =
+        this.data[key] ??
+        (identityHash ? this.data[legacyKey] : undefined) ??
+        this.newEntry(player, identityHash);
       const roleType = player.role?.type ?? 'human';
       const isSnakeGame = roleType === 'snake';
       const playerWon =
@@ -83,10 +96,15 @@ export class LeaderboardStore {
           : (winner === 'humans' && roleType !== 'snake') ||
             (winner === 'snakes' && roleType === 'snake');
 
+      if (identityHash && legacyKey !== key && this.data[legacyKey]) {
+        delete this.data[legacyKey];
+      }
+
       this.data[key] = {
         ...existing,
-        username: player.username, // update in case of display name change
+        username: displayName,
         avatar: player.avatar,
+        identityHash: identityHash ?? existing.identityHash,
         totalScore: existing.totalScore + player.score,
         gamesPlayed: existing.gamesPlayed + 1,
         gamesWon: existing.gamesWon + (playerWon ? 1 : 0),
@@ -155,10 +173,11 @@ export class LeaderboardStore {
     return username.toLowerCase().trim();
   }
 
-  private newEntry(player: Player): StoredEntry {
+  private newEntry(player: Player, identityHash?: string): StoredEntry {
     return {
       username: player.username,
       avatar: player.avatar,
+      identityHash,
       totalScore: 0,
       gamesPlayed: 0,
       gamesWon: 0,

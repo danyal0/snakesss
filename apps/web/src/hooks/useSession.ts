@@ -9,6 +9,8 @@ import { useGameStore } from '../store/gameStore';
 export interface StoredSession {
   roomId: string;
   username: string;
+  /** Resolved display name from server (may include #2 postfix). */
+  displayName?: string;
   avatar: string;
   playerId?: string;
   wasRoomManager?: boolean;

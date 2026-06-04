@@ -21,6 +21,9 @@ import { saveUserProfile, setActiveRoom, clearActiveRoom } from '../utils/userPr
 import { clearSession } from './useSession';
 import { syncEphemeralFromGameState } from '../store/syncEphemeralState';
 import { setJoinInFlight } from '../utils/roomSession';
+import { buildIdentityClaims, markJoinStarted } from '../utils/deviceFingerprint';
+import { applyJoinMeta } from '../utils/identityMessages';
+import type { JoinRoomMeta } from '@snakesss/shared-types';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -48,32 +51,55 @@ function rejoinFromSession(socket: AppSocket, roomId: string): void {
   if (_joinInFlight === roomId) return;
 
   _joinInFlight = roomId;
-  socket.emit(
-    'room:join',
-    {
-      roomId,
-      username: session.username,
-      avatar: session.avatar as AvatarEmoji,
-      asSpectator: false,
-      playerId: session.playerId,
-    },
-    (result) => {
-      _joinInFlight = null;
-      if ('error' in result) {
-        console.warn('[Socket] rejoin failed:', result.error);
-        useGameStore.getState().setLastSocketError(result.error);
-        if (/room not found/i.test(result.error)) return;
-        return;
-      }
-      applyRoomIdentity(
-        result,
+  void buildIdentityClaims().then((identity) => {
+    socket.emit(
+      'room:join',
+      {
         roomId,
-        session.username,
-        session.avatar,
-        socket.id ?? null
-      );
-    }
-  );
+        username: session.username,
+        avatar: session.avatar as AvatarEmoji,
+        asSpectator: false,
+        playerId: session.playerId,
+        identity,
+      },
+      (result, meta) => {
+        _joinInFlight = null;
+        if ('error' in result) {
+          console.warn('[Socket] rejoin failed:', result.error);
+          useGameStore.getState().setLastSocketError(result.error);
+          if (/room not found/i.test(result.error)) return;
+          return;
+        }
+        handleJoinSuccess(result, meta, roomId, session.username, session.avatar, socket.id ?? null);
+        const { displayUsername } = applyJoinMeta(meta);
+        saveSession({
+          roomId,
+          username: session.username,
+          displayName: displayUsername || session.username,
+          avatar: session.avatar,
+          playerId: useGameStore.getState().playerId ?? undefined,
+          savedAt: Date.now(),
+        });
+      }
+    );
+  });
+}
+
+function handleJoinSuccess(
+  result: import('@snakesss/shared-types').GameState,
+  meta: JoinRoomMeta | undefined,
+  roomId: string,
+  requestedUsername: string,
+  avatar: string,
+  socketId: string | null
+): void {
+  const { displayUsername, toast } = applyJoinMeta(meta);
+  const effectiveName = displayUsername || requestedUsername;
+  if (toast) {
+    useGameStore.getState().setLastSocketError(toast);
+    setTimeout(() => useGameStore.getState().setLastSocketError(null), 4000);
+  }
+  applyRoomIdentity(result, roomId, effectiveName, avatar, socketId);
 }
 
 let _listenersRegistered = false;
@@ -221,59 +247,77 @@ export function useSocket() {
     preferredRoomId?: string
   ) =>
     new Promise<string>((resolve, reject) => {
-      socket.emit(
-        'room:create',
-        {
-          username,
-          avatar: avatar as Parameters<ClientToServerEvents['room:create']>[0]['avatar'],
-          settings,
-          preferredRoomId: preferredRoomId?.toUpperCase(),
-        },
-        (roomId) => {
-          if (roomId) {
-            useGameStore.setState({ playerId: socket.id ?? null, username });
-            saveSession({
-              roomId,
-              username,
-              avatar,
-              playerId: socket.id ?? undefined,
-              wasRoomManager: true,
-              savedAt: Date.now(),
-            });
-            saveUserProfile({ username, avatar: avatar as AvatarEmoji, activeRoomId: roomId, wasRoomManager: true });
-            resolve(roomId);
-          } else reject(new Error('Failed to create room'));
-        }
-      );
+      markJoinStarted();
+      void buildIdentityClaims().then((identity) => {
+        socket.emit(
+          'room:create',
+          {
+            username,
+            avatar: avatar as Parameters<ClientToServerEvents['room:create']>[0]['avatar'],
+            settings,
+            preferredRoomId: preferredRoomId?.toUpperCase(),
+            identity,
+          },
+          (roomId) => {
+            if (roomId) {
+              useGameStore.setState({ playerId: socket.id ?? null, username });
+              saveSession({
+                roomId,
+                username,
+                displayName: username,
+                avatar,
+                playerId: socket.id ?? undefined,
+                wasRoomManager: true,
+                savedAt: Date.now(),
+              });
+              saveUserProfile({ username, avatar: avatar as AvatarEmoji, activeRoomId: roomId, wasRoomManager: true });
+              resolve(roomId);
+            } else reject(new Error('Failed to create room'));
+          }
+        );
+      });
     });
 
   const joinRoom = (roomId: string, username: string, avatar: string, asSpectator = false) =>
     new Promise<void>((resolve, reject) => {
       setJoinInFlight(roomId);
-      socket.emit(
-        'room:join',
-        { roomId, username, avatar: avatar as Parameters<ClientToServerEvents['room:join']>[0]['avatar'], asSpectator, playerId: loadSession(roomId)?.playerId },
-        (result) => {
-          setJoinInFlight(null);
-          if ('error' in result) reject(new Error(result.error));
-          else {
-            applyRoomIdentity(result, roomId, username, avatar, socket.id ?? null);
-            const queued = result.phase !== 'lobby' && asSpectator;
-            saveSession({
-              roomId,
-              username,
-              avatar,
-              playerId: useGameStore.getState().playerId ?? undefined,
-              queuedForNextGame: queued,
-              savedAt: Date.now(),
-            });
-            saveUserProfile({ username, avatar: avatar as AvatarEmoji, activeRoomId: roomId });
-            setActiveRoom(roomId, { queue: queued });
-            useGameStore.setState(syncEphemeralFromGameState(result, useGameStore.getState().playerId));
-            resolve();
+      markJoinStarted();
+      void buildIdentityClaims().then((identity) => {
+        socket.emit(
+          'room:join',
+          {
+            roomId,
+            username,
+            avatar: avatar as Parameters<ClientToServerEvents['room:join']>[0]['avatar'],
+            asSpectator,
+            playerId: loadSession(roomId)?.playerId,
+            identity,
+          },
+          (result, meta) => {
+            setJoinInFlight(null);
+            if ('error' in result) reject(new Error(result.error));
+            else {
+              handleJoinSuccess(result, meta, roomId, username, avatar, socket.id ?? null);
+              const { displayUsername } = applyJoinMeta(meta);
+              const effectiveName = displayUsername || username;
+              const queued = result.phase !== 'lobby' && asSpectator;
+              saveSession({
+                roomId,
+                username,
+                displayName: effectiveName,
+                avatar,
+                playerId: useGameStore.getState().playerId ?? undefined,
+                queuedForNextGame: queued,
+                savedAt: Date.now(),
+              });
+              saveUserProfile({ username: effectiveName, avatar: avatar as AvatarEmoji, activeRoomId: roomId });
+              setActiveRoom(roomId, { queue: queued });
+              useGameStore.setState(syncEphemeralFromGameState(result, useGameStore.getState().playerId));
+              resolve();
+            }
           }
-        }
-      );
+        );
+      });
     });
 
   const sendMessage = (content: string, type: 'chat' | 'accusation' | 'defense' = 'chat') => {
