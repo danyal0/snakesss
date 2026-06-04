@@ -19,6 +19,17 @@ interface LobbyScreenProps {
   gameState: GameState;
 }
 
+const QUESTION_TOPIC_PRESETS = [
+  'Science',
+  'History',
+  'Geography',
+  'Movies & TV',
+  'Sports',
+  'Music',
+  'Pop culture',
+  'Food & drink',
+] as const;
+
 const BOT_PERSONAS: { id: BotPersona; label: string; desc: string; emoji: string }[] = [
   { id: 'aggressive', label: 'Aggressive', desc: 'Loud & accusatory', emoji: '🔥' },
   { id: 'silent_strategist', label: 'Strategist', desc: 'Quiet & calculating', emoji: '🧠' },

@@ -87,12 +87,14 @@ export class RoomManager {
     }
 
     const botEngine = new BotDecisionEngine(this.aiProvider);
+    const xaiApiKey = process.env['XAI_API_KEY'];
     const engine = new GameEngine({
       managerId,
       managerName,
       managerAvatar,
       settings,
       preferredRoomId: preferred,
+      xaiApiKey,
     });
 
     engine.onStateChanged((state) => {
