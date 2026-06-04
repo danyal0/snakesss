@@ -94,3 +94,24 @@ export const SNAKE_DEFLECTION_PHRASES = [
   "Interesting that {target} is so quiet today.",
   "Has anyone noticed {target}'s voting pattern?",
 ];
+
+export const SNAKE_ANSWER_PUSH_PHRASES = [
+  "I'm confident it's {option}. {optionText} — that's the one.",
+  "Stop overthinking. {option} is clearly right: {optionText}",
+  "I already locked in {option}. {optionText} makes the most sense.",
+  "Everyone should pick {option}. I've been saying {optionText} the whole time.",
+  "Trust me on {option} — {optionText}. Don't switch now.",
+];
+
+export const HUMAN_SNAKE_SUSPECT_PHRASES = [
+  "{target} keeps pushing the wrong angle. Snake vibes.",
+  "Why is {target} so sure about {option}? Feels like misdirection.",
+  "I'm watching {target}. Their story doesn't add up.",
+  "{target} deflected when we asked about the answer. Suspicious.",
+];
+
+export const HUMAN_ANSWER_CONFIDENCE_PHRASES = [
+  "After this chat I'm going with {option}: {optionText}",
+  "The group convinced me — {option} ({optionText}) is our play.",
+  "Locking {option}. {optionText} survived every objection.",
+];

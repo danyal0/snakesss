@@ -11,6 +11,11 @@ import { buildVoteTally, stripAnswerRoles } from '@snakesss/game-engine';
 import { RoomManager } from './RoomManager';
 import { leaderboard } from './LeaderboardStore';
 import { clearRoomBotTimers, scheduleRoomBotTimeout } from './botTimers';
+import {
+  startBotDiscussion,
+  notifyDiscussionChat,
+  scheduleBotQuizAnswers,
+} from './botDiscussion';
 
 type AppSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 type AdminSocket = AppSocket & { isAdmin?: boolean };
@@ -318,8 +323,10 @@ export function registerSocketHandlers(
       const engine = roomManager.getEngine(meta.roomId);
       if (!engine) return;
       const message = engine.addMessage(meta.playerId, payload.content, payload.type);
-      if (message) io.to(`room:${meta.roomId}`).emit('chat:message', message);
-      else socket.emit('error', 'Message rate limit — slow down');
+      if (message) {
+        io.to(`room:${meta.roomId}`).emit('chat:message', message);
+        notifyDiscussionChat(meta.roomId, io, roomManager, meta.playerId);
+      } else socket.emit('error', 'Message rate limit — slow down');
     });
 
     // ── Chat: Typing ────────────────────────────────────────────────────────
@@ -480,13 +487,14 @@ async function handlePhaseTransition(
 
     case 'question': {
       engine.transitionToDiscussion();
-      void scheduleBotChat(roomId, io, roomManager);
+      startBotDiscussion(roomId, io, roomManager);
       break;
     }
 
     case 'discussion': {
       engine.transitionToVoting();
-      void scheduleBotAnswers(roomId, io, roomManager);
+      clearRoomBotTimers(roomId);
+      void scheduleBotQuizAnswers(roomId, io, roomManager);
       break;
     }
 
@@ -586,108 +594,6 @@ async function handlePhaseTransition(
 }
 
 // ─── Bot Scheduling ───────────────────────────────────────────────────────────
-
-async function scheduleBotAnswers(
-  roomId: string,
-  io: Server<ClientToServerEvents, ServerToClientEvents>,
-  roomManager: RoomManager
-): Promise<void> {
-  const engine = roomManager.getEngine(roomId);
-  if (!engine) return;
-  clearRoomBotTimers(roomId);
-  const state = engine.getState();
-  if (state.isPaused) return;
-  const bots = state.players.filter((p) => p.isBot && p.isAlive && !p.isSpectator);
-  const question = state.currentQuestion;
-  if (!question) return;
-
-  for (const bot of bots) {
-    const role = engine.getRole(bot.id);
-    const delay = 1500 + Math.random() * Math.min(state.settings.voteTimer * 800, 12000);
-
-    scheduleRoomBotTimeout(roomId, () => {
-      const currentState = engine.getState();
-      if (currentState.isPaused || currentState.phase !== 'voting') return;
-
-      let choice: import('@snakesss/shared-types').VoteChoice;
-      if (role?.type === 'snake') {
-        choice = 'snake';
-      } else {
-        const isCorrect = Math.random() < 0.65;
-        if (isCorrect) {
-          choice = question.correctIndex;
-        } else {
-          const wrongAnswers = ([0, 1, 2] as AnswerIndex[]).filter((i) => i !== question.correctIndex);
-          choice = wrongAnswers[Math.floor(Math.random() * wrongAnswers.length)]!;
-        }
-      }
-
-      const result = engine.submitAnswer(bot.id, choice);
-      if (result.success) {
-        const total = engine.getState().players.filter((p) => p.isAlive && !p.isSpectator).length;
-        io.to(`room:${roomId}`).emit('quiz:answer_update', engine.getAnswerMap().size, total);
-      }
-    }, delay);
-  }
-}
-
-
-async function scheduleBotChat(
-  roomId: string,
-  io: Server<ClientToServerEvents, ServerToClientEvents>,
-  roomManager: RoomManager
-): Promise<void> {
-  const engine = roomManager.getEngine(roomId);
-  const botEngine = roomManager.getBotEngine(roomId);
-  if (!engine || !botEngine) return;
-
-  clearRoomBotTimers(roomId);
-  const state = engine.getState();
-  if (state.isPaused) return;
-  const bots = state.players.filter((p) => p.isBot && p.isAlive && !p.isSpectator);
-
-  for (const bot of bots) {
-    const role = engine.getRole(bot.id);
-    if (!role) continue;
-
-    const delay = 2000 + Math.random() * 10000;
-    scheduleRoomBotTimeout(roomId, () => {
-      void (async () => {
-        const current = engine.getState();
-        if (current.isPaused || current.phase !== 'discussion') return;
-
-        const accusedBy = current.chat
-          .filter((m) => m.round === current.round && m.content.toLowerCase().includes(bot.username.toLowerCase()))
-          .map((m) => m.playerName);
-
-        const decision = await botEngine.decideMessage(bot, role.type, current, accusedBy);
-        if (!decision) return;
-
-        const check = engine.getState();
-        if (check.isPaused || check.phase !== 'discussion') return;
-
-        io.to(`room:${roomId}`).emit('chat:typing', {
-          playerId: bot.id,
-          playerName: bot.username,
-          isTyping: true,
-        });
-
-        scheduleRoomBotTimeout(roomId, () => {
-          const msg = engine.addMessage(bot.id, decision.message, 'chat');
-          if (msg) {
-            io.to(`room:${roomId}`).emit('chat:message', msg);
-            io.to(`room:${roomId}`).emit('chat:typing', {
-              playerId: bot.id,
-              playerName: bot.username,
-              isTyping: false,
-            });
-          }
-        }, decision.delay);
-      })();
-    }, delay);
-  }
-}
-
 
 async function scheduleBotVotes(
   roomId: string,
