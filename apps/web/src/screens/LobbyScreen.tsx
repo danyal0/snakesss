@@ -228,10 +228,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
           slideCount={LOBBY_TABS.length}
           dragOffset={lobbyDragOffset}
           isDragging={lobbyIsDragging}
-          onTouchStart={lobbySwipeHandlers.onTouchStart}
-          onTouchMove={lobbySwipeHandlers.onTouchMove}
-          onTouchEnd={lobbySwipeHandlers.onTouchEnd}
-          onTouchCancel={lobbySwipeHandlers.onTouchCancel}
+          {...lobbySwipeHandlers}
         >
           <div
             data-testid="lobby-panel-players"

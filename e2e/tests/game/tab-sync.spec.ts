@@ -193,3 +193,46 @@ test.describe('Game swipe on touch devices', () => {
     await expect(page.getByTestId('game-tab-vote')).toHaveCount(0);
   });
 });
+
+test.describe('Game desktop UX parity', () => {
+  test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+
+  test.beforeEach(async ({ page, request, e2eRoomId }) => {
+    await startE2EGame(request, e2eRoomId);
+    await forceE2EPhase(request, e2eRoomId, 'discussion');
+    await page.reload();
+    await readyGameScreen(page);
+  });
+
+  test('desktop shows Question and Chat tabs only (no Vote or Players tab)', async ({ page }) => {
+    await expect(page.getByTestId('game-tab-question')).toBeVisible();
+    await expect(page.getByTestId('game-tab-chat')).toBeVisible();
+    await expect(page.getByTestId('game-tab-question')).toHaveText(/Question/i);
+    await expect(page.getByTestId('game-tab-vote')).toHaveCount(0);
+    await expect(page.getByTestId('game-tab-players')).toHaveCount(0);
+  });
+
+  test('desktop leave button opens confirm dialog', async ({ page }) => {
+    await expect(page.getByTestId('btn-leave-game')).toBeVisible();
+    await page.getByTestId('btn-leave-game').click();
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible();
+    await page.getByTestId('confirm-dialog-cancel').click();
+  });
+
+  test('mouse drag on carousel switches chat to question', async ({ page }) => {
+    await expectGameTabMatchesPanel(page, 'chat');
+    const carousel = page.getByTestId('game-carousel');
+    const box = await carousel.boundingBox();
+    expect(box).toBeTruthy();
+    const y = box!.y + box!.height / 2;
+    const startX = box!.x + box!.width * 0.78;
+    const endX = startX - 140;
+    await page.mouse.move(startX, y);
+    await page.mouse.down();
+    await page.mouse.move(endX, y, { steps: 12 });
+    await page.mouse.up();
+    await expectGameTabMatchesPanel(page, 'question');
+    await expect(page.getByTestId('debate-question')).toBeVisible();
+  });
+});
+
