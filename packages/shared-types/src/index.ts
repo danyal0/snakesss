@@ -70,12 +70,30 @@ export interface Player {
 
 export type BotPersona = 'aggressive' | 'silent_strategist' | 'chaotic_liar';
 
+export interface BotObservedMessage {
+  playerId: string;
+  playerName: string;
+  content: string;
+  round: number;
+  timestamp: number;
+}
+
 export interface BotMemory {
   accusationsReceived: Array<{ from: string; round: number }>;
   accusationsMade: Array<{ against: string; round: number }>;
   votesFor: Array<{ target: string; round: number }>;
   perceivedThreat: Record<string, number>;
   chatHistory: string[];
+  /** Per-bot log of discussion messages this bot has processed. */
+  observedMessages: BotObservedMessage[];
+  /** Snake: wrong answer index chosen to push and defend. */
+  defendedAnswerIndex?: AnswerIndex;
+  /** Locked quiz choice once the bot is done debating. */
+  chosenAnswer?: VoteChoice;
+  answerLocked: boolean;
+  /** Human/mongoose: player ids ranked by snake suspicion. */
+  suspectedSnakeIds: string[];
+  discussionMessagesThisRound: number;
 }
 
 // ─── Game Phase Types ─────────────────────────────────────────────────────────
