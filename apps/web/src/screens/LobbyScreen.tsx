@@ -444,6 +444,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 <div className="h-px bg-white/5" />
                 <SettingRow
                   label="Discussion Timer"
+                  testId="discussion-timer"
                   value={settings.discussionTimer}
                   suffix="s"
                   onChange={(v) => setSettings({ ...settings, discussionTimer: v })}
@@ -581,6 +582,7 @@ function SettingRow({
   max,
   step,
   disabled,
+  testId,
 }: {
   label: string;
   value: number;
@@ -590,23 +592,37 @@ function SettingRow({
   max: number;
   step: number;
   disabled: boolean;
+  testId?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div
+      className="flex items-center justify-between gap-4"
+      data-testid={testId ? `setting-row-${testId}` : undefined}
+      data-no-swipe
+    >
       <span className="text-sm text-white/70 flex-1">{label}</span>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3" data-no-swipe>
         <button
-          className="w-8 h-8 rounded-xl glass-button flex items-center justify-center text-white/70 text-lg disabled:opacity-30"
+          type="button"
+          data-testid={testId ? `setting-${testId}-minus` : undefined}
+          data-no-swipe
+          className="w-8 h-8 rounded-xl glass-button flex items-center justify-center text-white/70 text-lg disabled:opacity-30 touch-manipulation"
           onClick={() => onChange(Math.max(min, value - step))}
           disabled={disabled || value <= min}
         >
           −
         </button>
-        <span className="text-sm font-bold text-white w-10 text-center tabular-nums">
+        <span
+          className="text-sm font-bold text-white w-10 text-center tabular-nums"
+          data-testid={testId ? `setting-${testId}-value` : undefined}
+        >
           {value}{suffix}
         </span>
         <button
-          className="w-8 h-8 rounded-xl glass-button flex items-center justify-center text-white/70 text-lg disabled:opacity-30"
+          type="button"
+          data-testid={testId ? `setting-${testId}-plus` : undefined}
+          data-no-swipe
+          className="w-8 h-8 rounded-xl glass-button flex items-center justify-center text-white/70 text-lg disabled:opacity-30 touch-manipulation"
           onClick={() => onChange(Math.min(max, value + step))}
           disabled={disabled || value >= max}
         >
@@ -628,10 +644,12 @@ function Toggle({
 }) {
   return (
     <button
+      type="button"
       role="switch"
       aria-checked={value}
+      data-no-swipe
       className={clsx(
-        'w-11 h-6 rounded-full relative transition-colors duration-200',
+        'w-11 h-6 rounded-full relative transition-colors duration-200 touch-manipulation',
         value ? 'bg-green-500' : 'bg-white/20',
         disabled && 'opacity-40 cursor-not-allowed'
       )}

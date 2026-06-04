@@ -21,6 +21,24 @@ function findScrollableAncestor(target: EventTarget | null): HTMLElement | null 
   return null;
 }
 
+/** Touches on controls must not start tab-swipe (prevents missed stepper taps). */
+function isSwipeDisabledTarget(target: EventTarget | null): boolean {
+  let node = target instanceof HTMLElement ? target : null;
+  while (node) {
+    if (node.dataset.noSwipe !== undefined) return true;
+    const tag = node.tagName;
+    if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+      return true;
+    }
+    if (tag === 'A' && node.hasAttribute('href')) return true;
+    if (node.getAttribute('role') === 'button' || node.getAttribute('role') === 'switch') {
+      return true;
+    }
+    node = node.parentElement;
+  }
+  return false;
+}
+
 /**
  * Touch swipe between ordered tabs with live drag preview (e.g. game question / chat).
  * Locks gesture axis so vertical scroll inside panels is not stolen by horizontal tab swipes.
@@ -60,6 +78,12 @@ export function useSwipeTabs<T extends string>(
   }, [activeTab, resetGesture]);
 
   const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isSwipeDisabledTarget(e.target)) {
+      touchStart.current = null;
+      scrollableTouchTarget.current = null;
+      gestureAxis.current = 'none';
+      return;
+    }
     const t = e.touches[0];
     if (!t) return;
     touchStart.current = { x: t.clientX, y: t.clientY };
