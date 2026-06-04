@@ -28,11 +28,10 @@ export function ConfirmDialog({
     <AnimatePresence>
       {open && (
         <>
-          <motion.button
-            type="button"
-            aria-label="Dismiss dialog"
+          <motion.div
+            aria-hidden
             data-testid="confirm-dialog-backdrop"
-            className="fixed inset-0 z-[200] bg-black/65 backdrop-blur-sm border-0 cursor-default"
+            className="fixed inset-0 z-[200] bg-black/65 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -51,6 +50,7 @@ export function ConfirmDialog({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 16 }}
               transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              onClick={(e) => e.stopPropagation()}
             >
               <GlassCard elevated glow={variant === 'danger' ? 'red' : 'green'} className="p-6 space-y-5">
                 <div className="text-center space-y-2">
@@ -69,20 +69,30 @@ export function ConfirmDialog({
                 </div>
                 <div className="flex gap-3">
                   <Button
+                    type="button"
                     data-testid="confirm-dialog-cancel"
                     variant="secondary"
                     size="md"
                     className="flex-1"
-                    onClick={onCancel}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCancel();
+                    }}
                   >
                     {cancelLabel}
                   </Button>
                   <Button
+                    type="button"
                     data-testid="confirm-dialog-confirm"
                     variant={variant === 'danger' ? 'danger' : 'primary'}
                     size="md"
                     className="flex-1"
-                    onClick={onConfirm}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onConfirm();
+                    }}
                   >
                     {confirmLabel}
                   </Button>

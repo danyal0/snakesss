@@ -31,6 +31,7 @@ import { SpectatorPhasePanel } from '../components/game/SpectatorPhasePanel';
 import { abandonRoom } from '../utils/abandonRoom';
 import { useConfirm } from '../context/ConfirmProvider';
 import { leaveRoomConfirmOptions } from '../hooks/useLeaveRoom';
+import { markLeavingRoomConfirmed } from '../context/ConfirmProvider';
 
 interface GameScreenProps {
   gameState: GameState;
@@ -78,6 +79,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
     }
     void confirm(leaveRoomConfirmOptions()).then((ok) => {
       if (!ok) return;
+      markLeavingRoomConfirmed();
       abandonRoom(gameState.roomId);
       navigate('/', { replace: true });
     });

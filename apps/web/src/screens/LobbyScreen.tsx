@@ -339,38 +339,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 Add AI bots to fill empty spots. Bots chat naturally, bluff, and vote like real players.
               </p>
 
-              {/* Current bots */}
-              {bots.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[10px] text-white/30 uppercase tracking-wider px-1">
-                    Active bots ({bots.length})
-                  </p>
-                  {bots.map((bot) => (
-                    <div
-                      key={bot.id}
-                      className="glass rounded-2xl px-4 py-3 flex items-center gap-3"
-                    >
-                      <span className="text-2xl">{bot.avatar}</span>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-white">{bot.username}</p>
-                        <p className="text-xs text-purple-300/70">
-                          {bot.botPersona?.replace('_', ' ') ?? 'bot'}
-                        </p>
-                      </div>
-                      {isManager && (
-                        <button
-                          onClick={() => handleKick(bot.id)}
-                          className="text-[10px] text-red-400/60 hover:text-red-300 px-2 py-1 rounded-lg hover:bg-red-500/10"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Add bot buttons */}
+              {/* Personality picker first, then list of added bots below */}
               {isManager ? (
                 <div className="space-y-3">
                   <p className="text-[10px] text-white/30 uppercase tracking-wider px-1">
@@ -416,6 +385,37 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
               ) : (
                 <div className="text-center py-8 text-white/40 text-sm">
                   Only the room manager can add bots
+                </div>
+              )}
+
+              {bots.length > 0 && (
+                <div className="space-y-2 pt-1 border-t border-white/8">
+                  <p className="text-[10px] text-white/30 uppercase tracking-wider px-1 pt-3">
+                    Added bots ({bots.length})
+                  </p>
+                  {bots.map((bot) => (
+                    <div
+                      key={bot.id}
+                      className="glass rounded-2xl px-4 py-3 flex items-center gap-3"
+                    >
+                      <span className="text-2xl">{bot.avatar}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{bot.username}</p>
+                        <p className="text-xs text-purple-300/70 capitalize">
+                          {bot.botPersona?.replace(/_/g, ' ') ?? 'bot'}
+                        </p>
+                      </div>
+                      {isManager && (
+                        <button
+                          type="button"
+                          onClick={() => handleKick(bot.id)}
+                          className="text-[10px] text-red-400/60 hover:text-red-300 px-2 py-1 rounded-lg hover:bg-red-500/10 flex-shrink-0"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
           </div>

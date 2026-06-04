@@ -26,6 +26,13 @@ type ConfirmContextValue = {
 
 const ConfirmContext = createContext<ConfirmContextValue | null>(null);
 
+/** Skip the next room navigation block after user already confirmed Leave. */
+const skipLeaveBlockerRef = { current: false };
+
+export function markLeavingRoomConfirmed(): void {
+  skipLeaveBlockerRef.current = true;
+}
+
 const LEAVE_ROOM_COPY: ConfirmOptions = {
   title: 'Leave room?',
   message:
@@ -49,7 +56,10 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
 
   const close = useCallback((value: boolean) => {
     setPending((p) => {
-      p?.resolve(value);
+      if (p) {
+        // Resolve before unmount so the first button tap completes the leave flow.
+        p.resolve(value);
+      }
       return null;
     });
   }, []);
@@ -92,6 +102,7 @@ export function useLeaveRoom() {
     async (navigate: NavigateFunction) => {
       const ok = await confirm(leaveRoomConfirmOptions());
       if (!ok) return false;
+      markLeavingRoomConfirmed();
       leaveRoom();
       navigate('/', { replace: true });
       return true;
@@ -115,13 +126,23 @@ function RoomLeaveBlocker({
     !!gameState?.roomId || !!loadUserProfile()?.activeRoomId;
 
   const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      import.meta.env.VITE_E2E !== 'true' &&
-      inRoomRoute &&
-      hasActiveSession &&
-      currentLocation.pathname.startsWith('/room/') &&
-      !nextLocation.pathname.startsWith('/room/')
+    ({ currentLocation, nextLocation }) => {
+      if (skipLeaveBlockerRef.current) return false;
+      return (
+        import.meta.env.VITE_E2E !== 'true' &&
+        inRoomRoute &&
+        hasActiveSession &&
+        currentLocation.pathname.startsWith('/room/') &&
+        !nextLocation.pathname.startsWith('/room/')
+      );
+    }
   );
+
+  useEffect(() => {
+    if (!location.pathname.startsWith('/room/')) {
+      skipLeaveBlockerRef.current = false;
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     if (blocker.state !== 'blocked' || handlingRef.current) return;
