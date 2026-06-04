@@ -17,7 +17,8 @@ import {
   syncPlayerIdentityFromState,
   saveSession,
 } from './useSession';
-import { saveUserProfile, setActiveRoom } from '../utils/userProfile';
+import { saveUserProfile, setActiveRoom, clearActiveRoom } from '../utils/userProfile';
+import { clearSession } from './useSession';
 import { syncEphemeralFromGameState } from '../store/syncEphemeralState';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -282,6 +283,14 @@ export function useSocket() {
 
   const kickPlayerFromRoom = (targetId: string) => { socket.emit('room:kick', targetId); };
 
+  const leaveRoom = () => {
+    const roomId = useGameStore.getState().gameState?.roomId;
+    socket.emit('room:leave');
+    if (roomId) clearSession(roomId);
+    clearActiveRoom();
+    useGameStore.getState().reset();
+  };
+
   const submitAnswer = (choice: VoteChoice) => {
     const payload =
       choice === 'snake' ? { snakeVote: true } : { answerIndex: choice as AnswerIndex };
@@ -310,6 +319,7 @@ export function useSocket() {
     updateSettings,
     addBot,
     kickPlayerFromRoom,
-    submitAnswer
+    submitAnswer,
+    leaveRoom,
   };
 }

@@ -17,8 +17,8 @@ export interface SwipeCarouselProps {
 }
 
 /**
- * Horizontal swipe carousel. Transform is based on viewport width (px) so slides
- * stay aligned; inactive slides remain in the layout but are clipped by overflow.
+ * Standard horizontal pager: fixed-width slides + translate3d track.
+ * Drag offset follows the finger; release snaps via parent tab index.
  */
 export function SwipeCarousel({
   activeIndex,
@@ -50,17 +50,17 @@ export function SwipeCarousel({
     return () => ro.disconnect();
   }, []);
 
-  const slideWidth = viewportWidth > 0 ? viewportWidth : undefined;
+  const slideWidth = viewportWidth;
+  const trackWidth = slideWidth > 0 ? slideWidth * count : undefined;
   const translateX =
-    slideWidth != null
-      ? -safeIndex * slideWidth + dragOffset
-      : `calc(-${(safeIndex * 100) / count}% + ${dragOffset}px)`;
+    slideWidth > 0 ? -safeIndex * slideWidth + dragOffset : 0;
 
   return (
     <div
       ref={viewportRef}
       data-testid={testId}
-      className={clsx('overflow-hidden flex-1 min-h-0 touch-pan-y', className)}
+      className={clsx('overflow-hidden flex-1 min-h-0', className)}
+      style={{ touchAction: 'pan-y' }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -69,33 +69,27 @@ export function SwipeCarousel({
       <div
         className={clsx('flex h-full', trackClassName)}
         style={{
-          width: slideWidth != null ? slideWidth * count : `${count * 100}%`,
+          width: trackWidth ?? `${count * 100}%`,
           transform:
-            typeof translateX === 'number'
+            slideWidth > 0
               ? `translate3d(${translateX}px, 0, 0)`
-              : `translate3d(${translateX}, 0, 0)`,
-          transition: isDragging ? 'none' : 'transform 0.25s ease-out',
+              : `translate3d(-${(safeIndex * 100) / count}%, 0, 0)`,
+          transition: isDragging ? 'none' : 'transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
           willChange: 'transform',
         }}
       >
-        {items.map((child, index) => {
-          const isActive = index === safeIndex;
-          return (
-            <div
-              key={index}
-              aria-hidden={!isActive}
-              className={clsx(
-                'h-full flex-shrink-0 min-h-0 overflow-hidden',
-                !isActive && !isDragging && 'pointer-events-none'
-              )}
-              style={{
-                width: slideWidth ?? `${100 / count}%`,
-              }}
-            >
-              {child}
-            </div>
-          );
-        })}
+        {items.map((child, index) => (
+          <div
+            key={index}
+            aria-hidden={index !== safeIndex}
+            className="h-full flex-shrink-0 min-h-0 overflow-hidden"
+            style={{
+              width: slideWidth > 0 ? slideWidth : `${100 / count}%`,
+            }}
+          >
+            {child}
+          </div>
+        ))}
       </div>
     </div>
   );

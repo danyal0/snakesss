@@ -22,7 +22,7 @@ function findScrollableAncestor(target: EventTarget | null): HTMLElement | null 
 }
 
 /**
- * Touch swipe between ordered tabs with live drag preview (e.g. game players / chat / vote).
+ * Touch swipe between ordered tabs with live drag preview (e.g. game question / chat).
  * Locks gesture axis so vertical scroll inside panels is not stolen by horizontal tab swipes.
  */
 export function useSwipeTabs<T extends string>(
@@ -88,6 +88,10 @@ export function useSwipeTabs<T extends string>(
       }
 
       if (gestureAxis.current === 'vertical') return;
+
+      if (gestureAxis.current === 'horizontal' && e.cancelable) {
+        e.preventDefault();
+      }
 
       const idx = tabs.indexOf(activeTabRef.current);
       if (idx < 0) return;
