@@ -101,6 +101,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
     setManualPanel('chat');
     resetGameSwipe();
     setLastReadCount(len);
+    requestAnimationFrame(() => resetGameSwipe());
   }, [
     gameState.chat,
     gameState.chat.length,
@@ -435,7 +436,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                   <div
                     data-testid="game-panel-question"
                     data-panel-visible={activePanel === 'question'}
-                    className="h-full min-h-0 flex flex-col"
+                    className="h-full min-h-0 w-full min-w-0 flex flex-col"
                   >
                     {gameState.phase === 'discussion' && gameState.currentQuestion ? (
                       <QuestionOptions
@@ -465,13 +466,14 @@ export function GameScreen({ gameState }: GameScreenProps) {
                   <div
                     data-testid="game-panel-chat"
                     data-panel-visible={activePanel === 'chat'}
-                    className="h-full min-h-0"
+                    className="h-full min-h-0 w-full min-w-0"
                   >
                     <ChatPanel
                       messages={gameState.chat}
                       typingIndicators={typingIndicators}
                       myPlayerId={playerId}
                       canChat={canChat}
+                      isActive={activePanel === 'chat' && !gameIsDragging}
                       onSend={handleSend}
                       onTyping={sendTyping}
                     />

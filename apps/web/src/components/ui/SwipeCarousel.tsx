@@ -57,6 +57,14 @@ export function SwipeCarousel({
     return () => ro.disconnect();
   }, []);
 
+  useLayoutEffect(() => {
+    if (isDragging) return;
+    const el = viewportRef.current;
+    if (!el || el.clientWidth <= 0) return;
+    lastWidthRef.current = el.clientWidth;
+    setViewportWidth(el.clientWidth);
+  }, [safeIndex, isDragging]);
+
   const slideWidth = viewportWidth > 0 ? viewportWidth : lastWidthRef.current;
   const trackWidth = slideWidth > 0 ? slideWidth * count : undefined;
   const translateX =
@@ -66,8 +74,8 @@ export function SwipeCarousel({
     <div
       ref={viewportRef}
       data-testid={testId}
-      className={clsx('overflow-hidden flex-1 min-h-0', className)}
-      style={{ touchAction: 'pan-y' }}
+      className={clsx('overflow-hidden flex-1 min-h-0 w-full', className)}
+      style={{ touchAction: 'pan-y', contain: 'layout' }}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
@@ -89,9 +97,10 @@ export function SwipeCarousel({
           <div
             key={index}
             aria-hidden={index !== safeIndex}
-            className="h-full flex-shrink-0 min-h-0 overflow-hidden"
+            className="h-full w-full min-w-0 flex-shrink-0 overflow-hidden"
             style={{
               width: slideWidth > 0 ? slideWidth : `${100 / count}%`,
+              maxWidth: slideWidth > 0 ? slideWidth : undefined,
             }}
           >
             {child}

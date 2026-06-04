@@ -8,6 +8,8 @@ interface ChatPanelProps {
   typingIndicators: TypingIndicator[];
   myPlayerId: string | null;
   canChat: boolean;
+  /** When false, skip auto-scroll (avoids shifting the swipe carousel off-screen). */
+  isActive?: boolean;
   onSend: (content: string, type?: 'chat' | 'accusation' | 'defense') => void;
   onTyping: (isTyping: boolean) => void;
 }
@@ -19,18 +21,22 @@ export function ChatPanel({
   typingIndicators,
   myPlayerId,
   canChat,
+  isActive = true,
   onSend,
   onTyping,
 }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [messageType, setMessageType] = useState<'chat' | 'accusation' | 'defense'>('chat');
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (!isActive) return;
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [messages, isActive]);
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
@@ -58,9 +64,12 @@ export function ChatPanel({
   const otherTyping = typingIndicators.filter((t) => t.playerId !== myPlayerId && t.isTyping);
 
   return (
-    <div data-testid="chat-panel" className="flex flex-col h-full">
+    <div data-testid="chat-panel" className="flex flex-col h-full w-full min-w-0">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-none touch-pan-y overscroll-y-contain space-y-2 p-3 min-h-0">
+      <div
+        ref={messagesScrollRef}
+        className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-none touch-pan-y overscroll-y-contain space-y-2 p-3 min-h-0 w-full"
+      >
         {messages.length === 0 && (
           <div
             data-testid="chat-empty-state"
@@ -82,15 +91,15 @@ export function ChatPanel({
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               className={clsx(
-                'flex gap-2',
-                msg.playerId === myPlayerId && 'flex-row-reverse'
+                'flex gap-2 w-full min-w-0',
+                msg.playerId === myPlayerId ? 'flex-row-reverse' : 'flex-row'
               )}
             >
               <div className="text-xl flex-shrink-0 mt-1">{msg.playerAvatar}</div>
               <div
                 className={clsx(
-                  'max-w-[75%] flex flex-col gap-0.5',
-                  msg.playerId === myPlayerId && 'items-end'
+                  'max-w-[85%] min-w-0 flex flex-col gap-0.5',
+                  msg.playerId === myPlayerId ? 'items-end' : 'items-start'
                 )}
               >
                 {msg.type === 'system' ? (
@@ -149,7 +158,6 @@ export function ChatPanel({
           )}
         </AnimatePresence>
 
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input area */}
