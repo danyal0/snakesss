@@ -19,7 +19,8 @@ import {
   clearActiveRoom,
 } from '../utils/userProfile';
 import { abandonRoom } from '../utils/abandonRoom';
-import { useConfirmLeaveHome } from '../hooks/useLeaveRoom';
+import { useConfirmLeaveHome, useLeaveRoom } from '../hooks/useLeaveRoom';
+import { Button } from '../components/ui/Button';
 
 const ROOM_JOIN_TIMEOUT_MS = 6000;
 
@@ -31,6 +32,7 @@ export function RoomScreen() {
   const location = useLocation();
   const { joinRoom, createRoom } = useSocket();
   const confirmLeaveHome = useConfirmLeaveHome();
+  const confirmLeaveRoom = useLeaveRoom();
   const gameState = useGameStore((s) => s.gameState);
   const isConnected = useGameStore((s) => s.isConnected);
   const playerId = useGameStore((s) => s.playerId);
@@ -262,9 +264,20 @@ export function RoomScreen() {
 
   if (queueNotice && isSpectator) {
     return (
-      <div className="h-full app-bg flex flex-col">
-        <div className="flex-shrink-0 px-4 py-2 bg-amber-500/15 border-b border-amber-500/20 text-center text-xs text-amber-200">
-          Game in progress — you are spectating. You will join automatically when the next lobby opens.
+      <div data-testid="spectate-queue-screen" className="h-full app-bg flex flex-col">
+        <div className="flex-shrink-0 px-4 py-2 bg-amber-500/15 border-b border-amber-500/20 flex items-center justify-between gap-3">
+          <p className="text-xs text-amber-200 flex-1 text-center">
+            Game in progress — you are spectating. You will join automatically when the next lobby opens.
+          </p>
+          <Button
+            data-testid="btn-leave-spectate-queue"
+            variant="ghost"
+            size="sm"
+            className="flex-shrink-0 text-amber-200/90"
+            onClick={() => void confirmLeaveRoom(navigate)}
+          >
+            ← Leave
+          </Button>
         </div>
         <div className="flex-1 min-h-0">
           <GameScreen gameState={gameState} />

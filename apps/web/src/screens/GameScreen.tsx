@@ -26,6 +26,11 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useLeaveRoom } from '../hooks/useLeaveRoom';
 import { loadSession } from '../hooks/useSession';
+import { isWatchOnlyGameView, watchModeLabel } from '../utils/gameViewMode';
+import { SpectatorPhasePanel } from '../components/game/SpectatorPhasePanel';
+import { abandonRoom } from '../utils/abandonRoom';
+import { useConfirm } from '../context/ConfirmProvider';
+import { leaveRoomConfirmOptions } from '../hooks/useLeaveRoom';
 
 interface GameScreenProps {
   gameState: GameState;
@@ -34,6 +39,7 @@ interface GameScreenProps {
 export function GameScreen({ gameState }: GameScreenProps) {
   const navigate = useNavigate();
   const confirmLeaveRoom = useLeaveRoom();
+  const confirm = useConfirm();
   const { sendMessage, castVote, sendTyping, submitAnswer, leaveRoom, playAgain } = useSocket();
   const store = useGameStore();
   /** User tab pick within current phase; cleared when phase/round changes. */
@@ -54,9 +60,6 @@ export function GameScreen({ gameState }: GameScreenProps) {
     ...gameSwipeHandlers
   } = useSwipeTabs(GAME_PANELS, activePanel, setActivePanel, { scrollableBias: false });
 
-  const handleLeaveRoom = () => {
-    void confirmLeaveRoom(navigate);
-  };
   const alivePlayers = selectAlivePlayers(store);
 
   const me = playerId ? gameState.players.find((p) => p.id === playerId) : undefined;
@@ -65,6 +68,20 @@ export function GameScreen({ gameState }: GameScreenProps) {
   const isSnake = myRole?.type === 'snake';
   const needsRejoin = !playerId || !me;
   const hasSavedSession = !!loadSession(gameState.roomId);
+  const isWatchOnly = isWatchOnlyGameView(gameState, playerId, me);
+  const watchLabel = watchModeLabel(me, needsRejoin);
+
+  const handleLeaveRoom = () => {
+    if (!needsRejoin) {
+      void confirmLeaveRoom(navigate);
+      return;
+    }
+    void confirm(leaveRoomConfirmOptions()).then((ok) => {
+      if (!ok) return;
+      abandonRoom(gameState.roomId);
+      navigate('/', { replace: true });
+    });
+  };
 
   const canChat =
     gameState.phase === 'discussion' &&
@@ -201,17 +218,22 @@ export function GameScreen({ gameState }: GameScreenProps) {
     gameState.phase === 'answer_reveal';
 
   return (
-    <div data-testid="game-screen" className="h-full app-bg flex flex-col min-h-0">
+    <div
+      data-testid={isWatchOnly ? 'spectate-screen' : 'game-screen'}
+      className="h-full app-bg flex flex-col min-h-0"
+    >
 
       {/* ── Overlays ─────────────────────────── */}
       {gameState.phase === 'dealing' && (
         <CardDeal playerCount={alivePlayers.length || gameState.players.filter((p) => !p.isSpectator).length} />
       )}
-      <RoleReveal
-        role={myRole}
-        show={store.showRoleReveal}
-        onDismiss={() => store.setShowRoleReveal(false)}
-      />
+      {!isWatchOnly && (
+        <RoleReveal
+          role={myRole}
+          show={store.showRoleReveal}
+          onDismiss={() => store.setShowRoleReveal(false)}
+        />
+      )}
       <EliminationReveal
         player={store.eliminatedPlayer}
         show={store.showEliminationReveal}
@@ -240,16 +262,26 @@ export function GameScreen({ gameState }: GameScreenProps) {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
-            {myRole && (
-              <div className={clsx(
-                'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold',
-                isSnake ? 'bg-red-500/20 text-red-300' :
-                myRole.type === 'mongoose' ? 'bg-yellow-500/20 text-yellow-300' :
-                'bg-green-500/20 text-green-300'
-              )}>
-                <span>{isSnake ? '🐍' : myRole.type === 'mongoose' ? '🦡' : '👤'}</span>
-                <span className="capitalize">{myRole.type}</span>
+            {isWatchOnly ? (
+              <div
+                data-testid="spectate-mode-badge"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300"
+              >
+                <span>👁️</span>
+                <span>{watchLabel}</span>
               </div>
+            ) : (
+              myRole && (
+                <div className={clsx(
+                  'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold',
+                  isSnake ? 'bg-red-500/20 text-red-300' :
+                  myRole.type === 'mongoose' ? 'bg-yellow-500/20 text-yellow-300' :
+                  'bg-green-500/20 text-green-300'
+                )}>
+                  <span>{isSnake ? '🐍' : myRole.type === 'mongoose' ? '🦡' : '👤'}</span>
+                  <span className="capitalize">{myRole.type}</span>
+                </div>
+              )
             )}
             {gameState.phaseEndsAt && <Timer endsAt={gameState.phaseEndsAt} />}
           </div>
@@ -316,8 +348,8 @@ export function GameScreen({ gameState }: GameScreenProps) {
               <QuestionOptions
                 question={gameState.currentQuestion}
                 mode="peek"
-                isSnake={isSnake}
-                snakeAnswer={store.snakeAnswer}
+                isSnake={!isWatchOnly && isSnake}
+                snakeAnswer={!isWatchOnly ? store.snakeAnswer : null}
                 phaseEndsAt={gameState.phaseEndsAt}
                 timerLabel="Peek"
               />
@@ -333,17 +365,25 @@ export function GameScreen({ gameState }: GameScreenProps) {
           )}
 
           {gameState.phase === 'voting' && gameState.currentQuestion && (
-            <AnswerVotePanel
-              question={gameState.currentQuestion}
-              isSnake={isSnake}
-              snakeAnswer={store.snakeAnswer}
-              phaseEndsAt={gameState.phaseEndsAt}
-              hasSubmitted={store.hasSubmittedAnswer}
-              submittedChoice={submittedChoice}
-              votedCount={store.answerCount}
-              totalCount={store.answerTotal || alivePlayers.length}
-              onSubmit={handleVoteChoice}
-            />
+            isWatchOnly ? (
+              <SpectatorPhasePanel
+                gameState={gameState}
+                voteCounts={voteCounts}
+                variant={isSpectator || needsRejoin ? 'spectator' : 'eliminated'}
+              />
+            ) : (
+              <AnswerVotePanel
+                question={gameState.currentQuestion}
+                isSnake={isSnake}
+                snakeAnswer={store.snakeAnswer}
+                phaseEndsAt={gameState.phaseEndsAt}
+                hasSubmitted={store.hasSubmittedAnswer}
+                submittedChoice={submittedChoice}
+                votedCount={store.answerCount}
+                totalCount={store.answerTotal || alivePlayers.length}
+                onSubmit={handleVoteChoice}
+              />
+            )
           )}
 
           {gameState.phase === 'answer_reveal' && (
@@ -473,6 +513,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       typingIndicators={typingIndicators}
                       myPlayerId={playerId}
                       canChat={canChat}
+                      isWatchOnly={isWatchOnly}
                       isActive={activePanel === 'chat' && !gameIsDragging}
                       onSend={handleSend}
                       onTyping={sendTyping}

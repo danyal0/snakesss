@@ -10,6 +10,7 @@ interface ChatPanelProps {
   canChat: boolean;
   /** When false, skip auto-scroll (avoids shifting the swipe carousel off-screen). */
   isActive?: boolean;
+  isWatchOnly?: boolean;
   onSend: (content: string, type?: 'chat' | 'accusation' | 'defense') => void;
   onTyping: (isTyping: boolean) => void;
 }
@@ -22,6 +23,7 @@ export function ChatPanel({
   myPlayerId,
   canChat,
   isActive = true,
+  isWatchOnly = false,
   onSend,
   onTyping,
 }: ChatPanelProps) {
@@ -219,7 +221,9 @@ export function ChatPanel({
 
       {!canChat && (
         <div className="p-3 border-t border-white/5 text-center text-xs text-white/40">
-          Chat disabled outside discussion phase
+          {isWatchOnly
+            ? 'Spectators can read chat — join as a player in the next lobby to send messages'
+            : 'Chat disabled outside discussion phase'}
         </div>
       )}
     </div>

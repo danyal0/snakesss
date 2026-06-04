@@ -14,9 +14,19 @@ test.describe('Spectator flows', () => {
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
     await page.goto(`/room/${e2eRoomId}`);
-    await expect(page.getByTestId('game-screen').or(page.getByTestId('room-loading'))).toBeVisible({
+    await expect(
+      page
+        .getByTestId('spectate-screen')
+        .or(page.getByTestId('game-screen'))
+        .or(page.getByTestId('room-loading'))
+    ).toBeVisible({
       timeout: 30_000,
     });
+    const spectateOrGame = page.getByTestId('spectate-screen').or(page.getByTestId('game-screen'));
+    await expect(spectateOrGame).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('game-tab-vote')).toHaveCount(0);
+    await expect(page.getByTestId('game-tab-question')).toBeVisible();
+    await expect(page.getByTestId('btn-leave-game')).toBeVisible();
     await ctx.close();
   });
 });
