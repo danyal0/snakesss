@@ -11,6 +11,8 @@ export interface StoredSession {
   username: string;
   avatar: string;
   playerId?: string;
+  wasRoomManager?: boolean;
+  queuedForNextGame?: boolean;
   savedAt: number;
 }
 
@@ -99,11 +101,13 @@ export function applyRoomIdentity(
     session?.playerId
   );
   useGameStore.setState({ playerId, username, gameState: state });
+  const me = playerId ? state.players.find((p) => p.id === playerId) : undefined;
   saveSession({
     roomId,
     username,
     avatar,
     playerId: playerId ?? undefined,
+    wasRoomManager: me?.isRoomManager,
     savedAt: Date.now(),
   });
 }

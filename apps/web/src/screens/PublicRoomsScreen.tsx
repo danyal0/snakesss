@@ -33,6 +33,7 @@ export function PublicRoomsScreen() {
   const phaseLabel: Record<string, string> = {
     lobby: '🔵 Waiting',
     dealing: '🎴 Starting',
+    question: '👀 Peek',
     discussion: '💬 Discussion',
     voting: '🗳️ Voting',
     elimination: '💀 Elimination',
@@ -60,39 +61,62 @@ export function PublicRoomsScreen() {
         </div>
       ) : (
         <div className="space-y-3">
-          {rooms.map((room, i) => (
-            <motion.div
-              key={room.roomId}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-            >
-              <GlassCard className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono font-bold text-lg text-white">{room.roomId}</span>
-                      <span className="text-xs text-white/50">
-                        {phaseLabel[room.phase] ?? room.phase}
-                      </span>
+          {rooms.map((room, i) => {
+            const inLobby = room.phase === 'lobby';
+            return (
+              <motion.div
+                key={room.roomId}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+              >
+                <GlassCard className="p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono font-bold text-lg text-white">{room.roomId}</span>
+                        <span className="text-xs text-white/50 truncate">
+                          {phaseLabel[room.phase] ?? room.phase}
+                        </span>
+                      </div>
+                      <div className="text-xs text-white/50">
+                        {room.playerCount}/{room.settings.maxPlayers} players
+                        {room.spectatorCount > 0 && ` · ${room.spectatorCount} spectating`}
+                      </div>
+                      {!inLobby && (
+                        <p className="text-[10px] text-amber-400/70 mt-1">
+                          Join queues you for the next lobby
+                        </p>
+                      )}
                     </div>
-                    <div className="text-xs text-white/50">
-                      {room.playerCount}/{room.settings.maxPlayers} players
-                      {room.spectatorCount > 0 && ` · ${room.spectatorCount} spectating`}
+
+                    <div className="flex flex-col gap-2 flex-shrink-0">
+                      <Button
+                        data-testid={`btn-join-${room.roomId}`}
+                        variant="primary"
+                        size="sm"
+                        onClick={() =>
+                          navigate(`/room/${room.roomId}`, { state: { roomIntent: 'join' } })
+                        }
+                      >
+                        Join
+                      </Button>
+                      <Button
+                        data-testid={`btn-spectate-${room.roomId}`}
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          navigate(`/room/${room.roomId}`, { state: { roomIntent: 'spectate' } })
+                        }
+                      >
+                        Spectate
+                      </Button>
                     </div>
                   </div>
-
-                  <Button
-                    variant={room.phase === 'lobby' ? 'primary' : 'secondary'}
-                    size="sm"
-                    onClick={() => navigate(`/room/${room.roomId}`)}
-                  >
-                    {room.phase === 'lobby' ? 'Join' : 'Spectate'}
-                  </Button>
-                </div>
-              </GlassCard>
-            </motion.div>
-          ))}
+                </GlassCard>
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </div>

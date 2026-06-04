@@ -5,13 +5,18 @@ export function generateId(prefix = ''): string {
   return prefix ? `${prefix}_${uuid}` : uuid;
 }
 
-export function generateRoomCode(): string {
+export function generateRoomCode(length = 4): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < length; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
+}
+
+/** True if code matches room id format (4 chars, allowed charset). */
+export function isValidRoomCode(code: string): boolean {
+  return /^[A-HJ-NP-Z2-9]{4}$/i.test(code.trim());
 }
 
 export function shuffleArray<T>(array: T[]): T[] {

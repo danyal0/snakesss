@@ -4,10 +4,11 @@ import { applyNetworkProfile } from '../../utils/network';
 test.describe('Error & edge state UI', () => {
   test('invalid room shows loading or error, not raw stack', async ({ page, homePage }) => {
     await homePage.goto();
-    await page.goto('/room/ZZZZZZ');
+    await page.goto('/room/BAD1');
     const loading = page.getByTestId('room-loading');
     const error = page.getByTestId('room-error');
-    await expect(loading.or(error)).toBeVisible({ timeout: 20_000 });
+    const joinGate = page.getByTestId('join-room-gate');
+    await expect(loading.or(error).or(joinGate)).toBeVisible({ timeout: 20_000 });
     const body = await page.content();
     expect(body).not.toMatch(/TypeError|undefined is not/);
   });
@@ -15,6 +16,7 @@ test.describe('Error & edge state UI', () => {
   test('join validation shows styled error', async ({ page, homePage }) => {
     await homePage.goto();
     await page.getByTestId('btn-join-room').click();
+    await page.getByTestId('input-username').fill('');
     await page.getByTestId('btn-submit-room').click();
     await expect(page.getByText(/Enter a username/i)).toBeVisible();
     const color = await page.getByText(/Enter a username/i).evaluate((el) =>

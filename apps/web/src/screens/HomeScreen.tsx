@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -9,15 +9,14 @@ import type { AvatarEmoji } from '@snakesss/shared-types';
 import { useSocket } from '../hooks/useSocket';
 import { useGameStore } from '../store/gameStore';
 import { LeaderboardWidget } from '../components/ui/LeaderboardWidget';
+import { loadSession } from '../hooks/useSession';
+import { loadUserProfile, saveUserProfile } from '../utils/userProfile';
+import { generateRandomUsername } from '../utils/randomName';
 
 export function HomeScreen() {
   const navigate = useNavigate();
   const { createRoom, joinRoom } = useSocket();
   const resetStore = useGameStore((s) => s.reset);
-  
-  React.useEffect(() => {
-    resetStore();
-  }, [resetStore]);
   const isConnected = useGameStore((s) => s.isConnected);
 
   const [mode, setMode] = useState<'home' | 'create' | 'join'>('home');
@@ -28,12 +27,40 @@ export function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    const profile = loadUserProfile();
+    if (profile) {
+      setUsername(profile.username);
+      setAvatar(profile.avatar as AvatarEmoji);
+    } else {
+      setUsername(generateRandomUsername());
+    }
+
+    const activeRoom = profile?.activeRoomId;
+    if (
+      import.meta.env.VITE_E2E !== 'true' &&
+      activeRoom &&
+      loadSession(activeRoom)
+    ) {
+      navigate(`/room/${activeRoom}`, { replace: true });
+      return;
+    }
+
+    resetStore();
+  }, [navigate, resetStore]);
+
+  const persistProfile = (name: string, av: AvatarEmoji) => {
+    saveUserProfile({ username: name, avatar: av });
+  };
+
   const handleCreate = async () => {
     if (!username.trim()) { setError('Enter a username'); return; }
     setLoading(true);
     setError('');
     try {
-      const roomId = await createRoom(username.trim(), avatar);
+      const name = username.trim();
+      persistProfile(name, avatar);
+      const roomId = await createRoom(name, avatar);
       navigate(`/room/${roomId}`);
     } catch (e) {
       setError((e as Error).message);
@@ -48,8 +75,11 @@ export function HomeScreen() {
     setLoading(true);
     setError('');
     try {
-      await joinRoom(roomCode.trim().toUpperCase(), username.trim(), avatar, asSpectator);
-      navigate(`/room/${roomCode.trim().toUpperCase()}`);
+      const name = username.trim();
+      const code = roomCode.trim().toUpperCase();
+      persistProfile(name, avatar);
+      await joinRoom(code, name, avatar, asSpectator);
+      navigate(`/room/${code}`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -59,7 +89,6 @@ export function HomeScreen() {
 
   return (
     <div data-testid="home-screen" className="h-full app-bg flex flex-col items-center justify-center p-6 overflow-y-auto scrollbar-none">
-      {/* Background decoration — hidden in E2E for stable screenshots */}
       {import.meta.env.VITE_E2E !== 'true' && (
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         {['🐍', '🦊', '🐺', '🦅', '🐻'].map((emoji, i) => (
@@ -80,7 +109,6 @@ export function HomeScreen() {
       )}
 
       <div className="w-full max-w-sm space-y-6 relative">
-        {/* Logo */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -178,7 +206,6 @@ export function HomeScreen() {
                 </Button>
               </div>
 
-              {/* Avatar picker */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-white/70">Choose Avatar</label>
                 <div className="flex items-center gap-3">
@@ -204,10 +231,10 @@ export function HomeScreen() {
                   <Input
                     data-testid="input-room-code"
                     label="Room Code"
-                    placeholder="e.g. ABC123"
+                    placeholder="e.g. AB12"
                     value={roomCode}
-                    onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                    maxLength={6}
+                    onChange={(e) => setRoomCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))}
+                    maxLength={4}
                     className="uppercase tracking-widest font-mono"
                     onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
                   />
@@ -242,10 +269,9 @@ export function HomeScreen() {
           </motion.div>
         )}
 
-        {/* Footer */}
         <div className="text-center">
           <p className="text-xs text-white/20">
-            Share room codes with friends · AI bots available
+            Share 4-letter room codes with friends · AI bots available
           </p>
         </div>
       </div>

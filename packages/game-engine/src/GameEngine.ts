@@ -18,7 +18,7 @@ import {
 } from '@snakesss/shared-types';
 import { assignRoles, checkWinCondition, getHighestScorers, revealRole, calculateRoundScores } from './roles';
 import { buildRoundVotes } from './voting';
-import { generateId, generateRoomCode } from './utils';
+import { generateId, generateRoomCode, isValidRoomCode } from './utils';
 import { getRandomQuestion, generateAIQuestion } from './questions';
 import { isTimedPhase, sanitizePublicState, sanitizeSpectatorState } from './publicState';
 
@@ -28,6 +28,7 @@ export interface CreateRoomOptions {
   managerAvatar: AvatarEmoji;
   settings?: Partial<RoomSettings>;
   xaiApiKey?: string;
+  preferredRoomId?: string;
 }
 
 export class GameEngine {
@@ -69,8 +70,12 @@ export class GameEngine {
       lastSeenAt: Date.now(),
     };
 
+    const preferred = options.preferredRoomId?.trim().toUpperCase();
+    const roomId =
+      preferred && isValidRoomCode(preferred) ? preferred : generateRoomCode();
+
     this.state = {
-      roomId: generateRoomCode(),
+      roomId,
       phase: 'lobby',
       round: 0,
       totalRounds: settings.totalRounds,

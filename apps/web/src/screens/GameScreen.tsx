@@ -49,7 +49,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
     dragOffset: gameDragOffset,
     isDragging: gameIsDragging,
     ...gameSwipeHandlers
-  } = useSwipeTabs(GAME_PANELS, activePanel, setActivePanel);
+  } = useSwipeTabs(GAME_PANELS, activePanel, setActivePanel, { scrollableBias: false });
   const alivePlayers = selectAlivePlayers(store);
 
   const me = playerId ? gameState.players.find((p) => p.id === playerId) : undefined;
@@ -92,6 +92,16 @@ export function GameScreen({ gameState }: GameScreenProps) {
     setManualPanel(null);
     resetGameSwipe();
   }, [phaseRoundKey, resetGameSwipe]);
+
+  useLayoutEffect(() => {
+    resetGameSwipe();
+  }, [activePanel, resetGameSwipe]);
+
+  useEffect(() => {
+    if (gameState.phase === 'question' || gameState.phase === 'voting') {
+      useGameStore.getState().setShowRoleReveal(false);
+    }
+  }, [gameState.phase]);
 
   const handleVote = useCallback((targetId: string) => castVote(targetId), [castVote]);
   const handleSend = useCallback(
@@ -248,15 +258,25 @@ export function GameScreen({ gameState }: GameScreenProps) {
       <div className="flex-1 min-h-0 overflow-hidden px-3 pb-3">
         <GlassCard className="h-full flex flex-col overflow-hidden p-0">
 
-          {gameState.phase === 'question' && gameState.currentQuestion && (
-            <QuestionOptions
-              question={gameState.currentQuestion}
-              mode="peek"
-              isSnake={isSnake}
-              snakeAnswer={store.snakeAnswer}
-              phaseEndsAt={gameState.phaseEndsAt}
-              timerLabel="Peek"
-            />
+          {gameState.phase === 'question' && (
+            gameState.currentQuestion ? (
+              <QuestionOptions
+                question={gameState.currentQuestion}
+                mode="peek"
+                isSnake={isSnake}
+                snakeAnswer={store.snakeAnswer}
+                phaseEndsAt={gameState.phaseEndsAt}
+                timerLabel="Peek"
+              />
+            ) : (
+              <div
+                data-testid="question-loading"
+                className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center"
+              >
+                <div className="text-4xl animate-pulse">🐍</div>
+                <p className="text-sm text-white/60">Loading question…</p>
+              </div>
+            )
           )}
 
           {gameState.phase === 'voting' && gameState.currentQuestion && (

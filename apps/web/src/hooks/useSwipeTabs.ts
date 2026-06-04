@@ -28,8 +28,10 @@ function findScrollableAncestor(target: EventTarget | null): HTMLElement | null 
 export function useSwipeTabs<T extends string>(
   tabs: readonly T[],
   activeTab: T,
-  setActiveTab: (tab: T) => void
+  setActiveTab: (tab: T) => void,
+  options?: { scrollableBias?: boolean }
 ) {
+  const scrollableBias = options?.scrollableBias !== false;
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const scrollableTouchTarget = useRef<HTMLElement | null>(null);
   const gestureAxis = useRef<GestureAxis>('none');
@@ -81,7 +83,7 @@ export function useSwipeTabs<T extends string>(
         const inScrollable = scrollableTouchTarget.current !== null;
         const absDx = Math.abs(dx);
         const absDy = Math.abs(dy);
-        if (inScrollable) {
+        if (inScrollable && scrollableBias) {
           gestureAxis.current =
             absDx > absDy * HORIZONTAL_BIAS ? 'horizontal' : 'vertical';
         } else {
@@ -102,7 +104,7 @@ export function useSwipeTabs<T extends string>(
 
       setDragOffset(offset);
     },
-    [tabs]
+    [tabs, scrollableBias]
   );
 
   const onTouchEnd = useCallback(

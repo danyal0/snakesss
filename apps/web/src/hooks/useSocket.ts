@@ -17,6 +17,8 @@ import {
   syncPlayerIdentityFromState,
   saveSession,
 } from './useSession';
+import { saveUserProfile, setActiveRoom } from '../utils/userProfile';
+import { syncEphemeralFromGameState } from '../store/syncEphemeralState';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -97,6 +99,8 @@ export function useSocketListeners(): void {
     socket.on('state:full', (state) => {
       useGameStore.getState().setGameState(state);
       syncPlayerIdentityFromState(state, socket.id ?? null);
+      const playerId = useGameStore.getState().playerId;
+      useGameStore.setState(syncEphemeralFromGameState(state, playerId));
 
       const session = loadSession(state.roomId);
       if (session && !useGameStore.getState().playerId) {
@@ -191,11 +195,21 @@ export function useSocketListeners(): void {
 export function useSocket() {
   const socket = getSocket();
 
-  const createRoom = (username: string, avatar: string, settings?: Record<string, unknown>) =>
+  const createRoom = (
+    username: string,
+    avatar: string,
+    settings?: Record<string, unknown>,
+    preferredRoomId?: string
+  ) =>
     new Promise<string>((resolve, reject) => {
       socket.emit(
         'room:create',
-        { username, avatar: avatar as Parameters<ClientToServerEvents['room:create']>[0]['avatar'], settings },
+        {
+          username,
+          avatar: avatar as Parameters<ClientToServerEvents['room:create']>[0]['avatar'],
+          settings,
+          preferredRoomId: preferredRoomId?.toUpperCase(),
+        },
         (roomId) => {
           if (roomId) {
             useGameStore.setState({ playerId: socket.id ?? null, username });
@@ -204,8 +218,10 @@ export function useSocket() {
               username,
               avatar,
               playerId: socket.id ?? undefined,
+              wasRoomManager: true,
               savedAt: Date.now(),
             });
+            saveUserProfile({ username, avatar: avatar as AvatarEmoji, activeRoomId: roomId, wasRoomManager: true });
             resolve(roomId);
           } else reject(new Error('Failed to create room'));
         }
@@ -221,6 +237,18 @@ export function useSocket() {
           if ('error' in result) reject(new Error(result.error));
           else {
             applyRoomIdentity(result, roomId, username, avatar, socket.id ?? null);
+            const queued = result.phase !== 'lobby' && asSpectator;
+            saveSession({
+              roomId,
+              username,
+              avatar,
+              playerId: useGameStore.getState().playerId ?? undefined,
+              queuedForNextGame: queued,
+              savedAt: Date.now(),
+            });
+            saveUserProfile({ username, avatar: avatar as AvatarEmoji, activeRoomId: roomId });
+            setActiveRoom(roomId, { queue: queued });
+            useGameStore.setState(syncEphemeralFromGameState(result, useGameStore.getState().playerId));
             resolve();
           }
         }

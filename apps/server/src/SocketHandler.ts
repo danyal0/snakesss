@@ -69,10 +69,23 @@ export function registerSocketHandlers(
 
     // ── Room: Create ────────────────────────────────────────────────────────
     socket.on('room:create', (_payload: CreateRoomPayload, cb) => {
-      const { username, avatar, settings } = _payload;
+      const { username, avatar, settings, preferredRoomId } = _payload;
       const playerId = socket.id;
 
-      const roomId = roomManager.createRoom(playerId, username, avatar, settings);
+      let roomId: string;
+      try {
+        roomId = roomManager.createRoom(
+          playerId,
+          username,
+          avatar,
+          settings,
+          preferredRoomId
+        );
+      } catch (e) {
+        cb('');
+        socket.emit('error', (e as Error).message);
+        return;
+      }
       const meta = socketMeta.get(socket)!;
       meta.playerId = playerId;
       meta.roomId = roomId;

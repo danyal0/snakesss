@@ -14,7 +14,7 @@ export function Input({ label, error, className, ...props }: InputProps) {
       )}
       <input
         className={clsx(
-          'glass rounded-xl px-4 py-3 text-white',
+          'glass rounded-xl px-4 py-3 text-white text-base',
           'placeholder:text-white/30 outline-none',
           'focus:border-white/30 focus:ring-1 focus:ring-white/20',
           'transition-all duration-200',

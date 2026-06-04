@@ -65,7 +65,7 @@ export function SwipeCarousel({
           return (
             <div
               key={index}
-              aria-hidden={!showSlide}
+              aria-hidden={!isActive && !isDragging}
               className={clsx(
                 'h-full flex-shrink-0 min-h-0 overflow-hidden',
                 !showSlide && 'pointer-events-none invisible'

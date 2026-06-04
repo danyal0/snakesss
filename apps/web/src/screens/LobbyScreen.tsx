@@ -10,6 +10,8 @@ import { useSocket } from '../hooks/useSocket';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
 import { SwipeCarousel } from '../components/ui/SwipeCarousel';
 import { useGameStore } from '../store/gameStore';
+import { clearSession } from '../hooks/useSession';
+import { clearActiveRoom } from '../utils/userProfile';
 
 const LOBBY_TABS = ['players', 'bots', 'settings'] as const;
 type LobbyTab = (typeof LOBBY_TABS)[number];
@@ -102,7 +104,15 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
       {/* Header */}
       <div className="flex-shrink-0 px-4 pt-4 pb-3 space-y-3">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              clearSession(gameState.roomId);
+              clearActiveRoom();
+              navigate('/');
+            }}
+          >
             ← Leave
           </Button>
           <div className="text-center">
@@ -435,10 +445,8 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   label="Snake Peek"
                   value={settings.snakePeekTimer ?? settings.questionTimer}
                   suffix="s"
-                  onChange={(v) =>
-                    setSettings({ ...settings, snakePeekTimer: v, questionTimer: v })
-                  }
-                  min={3} max={15} step={1}
+                  onChange={(v) => setSettings({ ...settings, snakePeekTimer: v })}
+                  min={5} max={90} step={5}
                   disabled={!isManager}
                 />
                 <div className="h-px bg-white/5" />

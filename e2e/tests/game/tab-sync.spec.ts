@@ -44,8 +44,7 @@ test.describe('Game tab ↔ panel sync', () => {
     await expect(page.getByTestId('chat-empty-state')).toBeVisible();
     await expect(page.getByTestId('chat-input')).toBeVisible();
     await expect(page.getByTestId('chat-send')).toBeVisible();
-    await expect(page.getByText('Answer voting opens after the debate')).not.toBeVisible();
-    await expect(page.getByText('Secret vote')).not.toBeVisible();
+    await expect(page.getByTestId('game-panel-vote')).not.toBeVisible();
   });
 
   test('discussion: player can send first message before bots', async ({ page }) => {

@@ -74,14 +74,21 @@ export class RoomManager {
     managerId: string,
     managerName: string,
     managerAvatar: AvatarEmoji,
-    settings?: Partial<RoomSettings>
+    settings?: Partial<RoomSettings>,
+    preferredRoomId?: string
   ): string {
+    const preferred = preferredRoomId?.trim().toUpperCase();
+    if (preferred && this.rooms.has(preferred)) {
+      throw new Error('Room code already in use');
+    }
+
     const botEngine = new BotDecisionEngine(this.aiProvider);
     const engine = new GameEngine({
       managerId,
       managerName,
       managerAvatar,
       settings,
+      preferredRoomId: preferred,
     });
 
     engine.onStateChanged((state) => {

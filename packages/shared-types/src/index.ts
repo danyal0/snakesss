@@ -184,8 +184,8 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   botCount: 0,
   discussionTimer: 120,
   voteTimer: 30,
-  questionTimer: 5,
-  snakePeekTimer: 5,
+  questionTimer: 15,
+  snakePeekTimer: 15,
   totalRounds: 6,
   roleDistribution: { snakes: 2, humans: 1, mongooses: 1 }, // 4-player default
   isPrivate: false,
@@ -268,6 +268,8 @@ export interface CreateRoomPayload {
   username: string;
   avatar: AvatarEmoji;
   settings?: Partial<RoomSettings>;
+  /** Recreate a closed room with the same code (manager only, must be available). */
+  preferredRoomId?: string;
 }
 
 export interface SendMessagePayload {
