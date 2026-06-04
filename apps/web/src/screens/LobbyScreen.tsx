@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import { useNavigate } from 'react-router-dom';
+import { useLeaveRoom } from '../hooks/useLeaveRoom';
 import type { GameState, RoomSettings, BotPersona } from '@snakesss/shared-types';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
@@ -10,8 +11,6 @@ import { useSocket } from '../hooks/useSocket';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
 import { SwipeCarousel } from '../components/ui/SwipeCarousel';
 import { useGameStore } from '../store/gameStore';
-import { clearSession } from '../hooks/useSession';
-import { clearActiveRoom } from '../utils/userProfile';
 
 const LOBBY_TABS = ['players', 'bots', 'settings'] as const;
 type LobbyTab = (typeof LOBBY_TABS)[number];
@@ -28,6 +27,7 @@ const BOT_PERSONAS: { id: BotPersona; label: string; desc: string; emoji: string
 
 export function LobbyScreen({ gameState }: LobbyScreenProps) {
   const navigate = useNavigate();
+  const confirmLeaveRoom = useLeaveRoom();
   const { startGame, updateSettings, addBot, kickPlayerFromRoom } = useSocket();
   const playerId = useGameStore((s) => s.playerId);
   const lastSocketError = useGameStore((s) => s.lastSocketError);
@@ -120,9 +120,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
             variant="ghost"
             size="sm"
             onClick={() => {
-              clearSession(gameState.roomId);
-              clearActiveRoom();
-              navigate('/');
+              void confirmLeaveRoom(navigate);
             }}
           >
             ← Leave

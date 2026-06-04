@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
-import App from './App';
+import { RouterProvider } from 'react-router-dom';
+import { router } from './router';
 import './index.css';
 import { installTestHarness } from './testHarness';
 import { installPreventZoom } from './utils/preventZoom';
@@ -14,8 +14,6 @@ if (import.meta.env.VITE_E2E === 'true') {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <RouterProvider router={router} />
   </React.StrictMode>
 );

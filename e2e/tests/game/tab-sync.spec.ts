@@ -125,6 +125,10 @@ test.describe('Game tab ↔ panel sync', () => {
 
   test('leave button visible during game', async ({ page }) => {
     await expect(page.getByTestId('btn-leave-game')).toBeVisible();
+    await page.getByTestId('btn-leave-game').click();
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible();
+    await page.getByTestId('confirm-dialog-cancel').click();
+    await expect(page.getByTestId('confirm-dialog')).toHaveCount(0);
   });
 });
 
