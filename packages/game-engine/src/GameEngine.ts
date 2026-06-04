@@ -19,7 +19,7 @@ import {
 import { assignRoles, checkWinCondition, getHighestScorers, revealRole, calculateRoundScores } from './roles';
 import { buildRoundVotes } from './voting';
 import { generateId, generateRoomCode, isValidRoomCode } from './utils';
-import { getRandomQuestion, generateAIQuestion } from './questions';
+import { getRandomQuestion, fetchApprovedQuestion } from './questions';
 import { isTimedPhase, sanitizePublicState, sanitizeSpectatorState } from './publicState';
 
 export interface CreateRoomOptions {
@@ -276,11 +276,19 @@ export class GameEngine {
   // ─── Question Phase ───────────────────────────────────────────────────────
 
   async transitionToQuestion(): Promise<void> {
-    const question = this.xaiApiKey
-      ? await generateAIQuestion(this.xaiApiKey, this.usedQuestionTopics)
+    const { aiQuestionsEnabled, questionTopic } = this.state.settings;
+    const topic = questionTopic?.trim() || undefined;
+    const useAi = Boolean(this.xaiApiKey) && aiQuestionsEnabled !== false;
+
+    const question = useAi
+      ? await fetchApprovedQuestion(this.xaiApiKey!, {
+          topic,
+          usedTopics: this.usedQuestionTopics,
+        })
       : getRandomQuestion();
 
-    this.usedQuestionTopics.push(question.text.split(' ').slice(0, 3).join(' '));
+    const topicTag = topic ?? question.text.split(' ').slice(0, 3).join(' ');
+    this.usedQuestionTopics.push(topicTag);
     this.answerMap.clear();
 
     const peekMs = (this.state.settings.snakePeekTimer ?? this.state.settings.questionTimer) * 1000;

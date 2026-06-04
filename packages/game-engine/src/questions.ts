@@ -1,4 +1,4 @@
-import type { QuizQuestion } from '@snakesss/shared-types';
+import type { AnswerIndex, QuizQuestion } from '@snakesss/shared-types';
 import { generateId } from './utils';
 
 // ─── Static Question Bank (40+ questions) ────────────────────────────────────
@@ -66,42 +66,36 @@ export function resetQuestionCycle(): void {
   usedIndices.clear();
 }
 
-// ─── xAI Question Generator ───────────────────────────────────────────────────
+// ─── Quality gate types ───────────────────────────────────────────────────────
 
-export async function generateAIQuestion(
-  apiKey: string,
-  usedTopics: string[] = []
-): Promise<QuizQuestion> {
-  const avoidTopics = usedTopics.length > 0
-    ? ` Avoid these topics: ${usedTopics.slice(-5).join(', ')}.`
-    : '';
+export interface QuestionQualityRating {
+  overallScore: number;
+  closeAnswersScore: number;
+  passes: boolean;
+  reason?: string;
+}
 
+export interface FetchApprovedQuestionOptions {
+  topic?: string;
+  usedTopics?: string[];
+  maxAttempts?: number;
+  minCloseAnswersScore?: number;
+  minOverallScore?: number;
+}
+
+export const DEFAULT_MIN_CLOSE_ANSWERS_SCORE = 7;
+export const DEFAULT_MIN_OVERALL_SCORE = 7;
+export const DEFAULT_MAX_QUESTION_ATTEMPTS = 5;
+
+const XAI_CHAT_URL = 'https://api.x.ai/v1/chat/completions';
+const XAI_MODEL = 'grok-3-mini';
+
+// ─── Parsing helpers (testable) ───────────────────────────────────────────────
+
+export function parseQuizQuestionJson(raw: string): QuizQuestion | null {
   try {
-    const res = await fetch('https://api.x.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'grok-3-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `Generate a fun trivia question for a party game. The question should be interesting and have one clearly correct answer.${avoidTopics} Respond ONLY with valid JSON in this exact format: {"text":"...","options":["option A","option B","option C"],"correctIndex":0} where correctIndex is 0, 1, or 2 (zero-indexed position of the correct option). Make the wrong options plausible but clearly wrong.`,
-          },
-          { role: 'user', content: 'Generate a trivia question.' },
-        ],
-        max_tokens: 150,
-        temperature: 1.0,
-      }),
-    });
-
-    if (!res.ok) return getRandomQuestion();
-
-    const data = await res.json() as { choices: Array<{ message: { content: string } }> };
-    const raw = data.choices[0]?.message?.content?.trim() ?? '';
-    const parsed = JSON.parse(raw) as {
+    const cleaned = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+    const parsed = JSON.parse(cleaned) as {
       text: string;
       options: [string, string, string];
       correctIndex: 0 | 1 | 2;
@@ -109,14 +103,173 @@ export async function generateAIQuestion(
 
     if (
       typeof parsed.text === 'string' &&
+      parsed.text.trim().length > 0 &&
       Array.isArray(parsed.options) &&
       parsed.options.length === 3 &&
+      parsed.options.every((o) => typeof o === 'string' && o.trim().length > 0) &&
       [0, 1, 2].includes(parsed.correctIndex)
     ) {
-      return { ...parsed, id: generateId('q') };
+      return {
+        text: parsed.text.trim(),
+        options: parsed.options.map((o) => o.trim()) as [string, string, string],
+        correctIndex: parsed.correctIndex,
+        id: generateId('q'),
+      };
     }
-    return getRandomQuestion();
+    return null;
   } catch {
-    return getRandomQuestion();
+    return null;
   }
+}
+
+export function parseQuestionQualityJson(raw: string): QuestionQualityRating | null {
+  try {
+    const cleaned = raw.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+    const parsed = JSON.parse(cleaned) as {
+      overallScore: number;
+      closeAnswersScore: number;
+      passes: boolean;
+      reason?: string;
+    };
+
+    if (
+      typeof parsed.overallScore === 'number' &&
+      typeof parsed.closeAnswersScore === 'number' &&
+      typeof parsed.passes === 'boolean'
+    ) {
+      return {
+        overallScore: clampScore(parsed.overallScore),
+        closeAnswersScore: clampScore(parsed.closeAnswersScore),
+        passes: parsed.passes,
+        reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function meetsQualityThreshold(
+  rating: QuestionQualityRating,
+  minCloseAnswersScore = DEFAULT_MIN_CLOSE_ANSWERS_SCORE,
+  minOverallScore = DEFAULT_MIN_OVERALL_SCORE
+): boolean {
+  return (
+    rating.passes &&
+    rating.closeAnswersScore >= minCloseAnswersScore &&
+    rating.overallScore >= minOverallScore
+  );
+}
+
+function clampScore(n: number): number {
+  return Math.max(1, Math.min(10, Math.round(n)));
+}
+
+function buildTopicClause(topic?: string, usedTopics: string[] = []): string {
+  const parts: string[] = [];
+  const trimmed = topic?.trim();
+  if (trimmed) {
+    parts.push(`The question MUST be about this category/topic: "${trimmed}".`);
+  }
+  if (usedTopics.length > 0) {
+    parts.push(`Avoid repeating these recent topics: ${usedTopics.slice(-5).join(', ')}.`);
+  }
+  return parts.length > 0 ? ` ${parts.join(' ')}` : '';
+}
+
+async function xaiChat(apiKey: string, system: string, user: string, maxTokens: number, temperature: number): Promise<string | null> {
+  try {
+    const res = await fetch(XAI_CHAT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: XAI_MODEL,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        max_tokens: maxTokens,
+        temperature,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
+    return data.choices[0]?.message?.content?.trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── xAI Question Generator ───────────────────────────────────────────────────
+
+export async function generateAIQuestion(
+  apiKey: string,
+  usedTopics: string[] = [],
+  topic?: string
+): Promise<QuizQuestion | null> {
+  const topicClause = buildTopicClause(topic, usedTopics);
+  const system = `You write trivia for a social deduction party game where players debate which answer is correct.
+${topicClause}
+Requirements:
+- Exactly one objectively correct answer among 3 options.
+- Wrong answers must be VERY plausible and CLOSE to the correct one — similar era, category, magnitude, or wording — so players genuinely struggle to pick.
+- Avoid joke options, absurd distractors, or answers that are obviously wrong.
+Respond ONLY with valid JSON: {"text":"...","options":["A","B","C"],"correctIndex":0} where correctIndex is 0, 1, or 2.`;
+
+  const user = topic?.trim()
+    ? `Generate one hard trivia question about: ${topic.trim()}`
+    : 'Generate one hard trivia question with very close wrong answers.';
+
+  const raw = await xaiChat(apiKey, system, user, 180, 1.0);
+  if (!raw) return null;
+  return parseQuizQuestionJson(raw);
+}
+
+export async function rateQuestionQuality(
+  apiKey: string,
+  question: QuizQuestion
+): Promise<QuestionQualityRating | null> {
+  const labels = ['A', 'B', 'C'] as const;
+  const optionsBlock = question.options
+    .map((opt, i) => `${labels[i]}: ${opt}${i === question.correctIndex ? ' (CORRECT)' : ''}`)
+    .join('\n');
+
+  const system = `You quality-check trivia for a party game. Players must debate which of 3 answers is correct.
+STRONG = wrong options are very plausible and close to the correct answer (same ballpark) — genuinely tough to decide.
+WEAK = obviously wrong distractors, only one plausible option, trick wording, or ambiguous correct answer.
+Respond ONLY with JSON: {"overallScore":1-10,"closeAnswersScore":1-10,"passes":boolean,"reason":"brief"}
+Set passes=true ONLY when closeAnswersScore>=7 AND overallScore>=7.`;
+
+  const user = `Question: ${question.text}\nOptions:\n${optionsBlock}\n\nRate difficulty and how close the wrong answers are.`;
+
+  const raw = await xaiChat(apiKey, system, user, 120, 0.2);
+  if (!raw) return null;
+  return parseQuestionQualityJson(raw);
+}
+
+/** Generate and rate questions until one passes quality, or fall back to static bank. */
+export async function fetchApprovedQuestion(
+  apiKey: string,
+  options: FetchApprovedQuestionOptions = {}
+): Promise<QuizQuestion> {
+  const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_QUESTION_ATTEMPTS;
+  const minClose = options.minCloseAnswersScore ?? DEFAULT_MIN_CLOSE_ANSWERS_SCORE;
+  const minOverall = options.minOverallScore ?? DEFAULT_MIN_OVERALL_SCORE;
+  const topic = options.topic?.trim() || undefined;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const question = await generateAIQuestion(apiKey, options.usedTopics ?? [], topic);
+    if (!question) continue;
+
+    const rating = await rateQuestionQuality(apiKey, question);
+    if (rating && meetsQualityThreshold(rating, minClose, minOverall)) {
+      return question;
+    }
+  }
+
+  return getRandomQuestion();
 }

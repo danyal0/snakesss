@@ -172,6 +172,10 @@ export interface RoomSettings {
   isPrivate: boolean;
   allowSpectators: boolean;
   advancedRoles: boolean; // enables Mongoose role
+  /** Manager-chosen category/topic for AI-generated trivia (empty = any). */
+  questionTopic: string;
+  /** When true and xAI is configured, generate + quality-gate questions. */
+  aiQuestionsEnabled: boolean;
 }
 
 // Big Potato role distribution table (always includes Mongoose)
@@ -209,6 +213,8 @@ export const DEFAULT_ROOM_SETTINGS: RoomSettings = {
   isPrivate: false,
   allowSpectators: true,
   advancedRoles: true, // mongoose enabled by default per Big Potato rules
+  questionTopic: '',
+  aiQuestionsEnabled: true,
 };
 
 // ─── Game Event ───────────────────────────────────────────────────────────────
