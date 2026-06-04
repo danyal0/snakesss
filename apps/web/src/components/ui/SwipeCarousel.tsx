@@ -36,6 +36,7 @@ export function SwipeCarousel({
 }: SwipeCarouselProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
+  const lastWidthRef = useRef(0);
   const count = Math.max(1, slideCount);
   const safeIndex = Math.min(Math.max(0, activeIndex), count - 1);
   const items = React.Children.toArray(children);
@@ -43,14 +44,20 @@ export function SwipeCarousel({
   useLayoutEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
-    const measure = () => setViewportWidth(el.clientWidth);
+    const measure = () => {
+      const w = el.clientWidth;
+      if (w > 0) {
+        lastWidthRef.current = w;
+        setViewportWidth(w);
+      }
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const slideWidth = viewportWidth;
+  const slideWidth = viewportWidth > 0 ? viewportWidth : lastWidthRef.current;
   const trackWidth = slideWidth > 0 ? slideWidth * count : undefined;
   const translateX =
     slideWidth > 0 ? -safeIndex * slideWidth + dragOffset : 0;

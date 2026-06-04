@@ -54,6 +54,11 @@ export function useSwipeTabs<T extends string>(
   /** Clear drag offset when tab changes programmatically (phase switch, round change). */
   const resetDrag = resetGesture;
 
+  // Keep carousel transform aligned with the highlighted tab (tab tap, auto-switch, etc.)
+  useEffect(() => {
+    resetGesture();
+  }, [activeTab, resetGesture]);
+
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0];
     if (!t) return;

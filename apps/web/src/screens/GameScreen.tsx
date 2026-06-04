@@ -74,9 +74,41 @@ export function GameScreen({ gameState }: GameScreenProps) {
   // Unread chat badge
   const [lastReadCount, setLastReadCount] = useState(0);
   const unreadCount = Math.max(0, gameState.chat.length - lastReadCount);
+  const seenChatLenRef = useRef(gameState.chat.length);
+
   useEffect(() => {
     if (activePanel === 'chat') setLastReadCount(gameState.chat.length);
   }, [activePanel, gameState.chat.length]);
+
+  // Incoming bot/player chat: snap to chat tab so content is not shown under Question mid-swipe
+  useEffect(() => {
+    if (gameState.phase !== 'discussion') {
+      seenChatLenRef.current = gameState.chat.length;
+      return;
+    }
+
+    const len = gameState.chat.length;
+    const prevLen = seenChatLenRef.current;
+    seenChatLenRef.current = len;
+    if (len <= prevLen || gameIsDragging) return;
+
+    const incoming = gameState.chat.slice(prevLen).some(
+      (m) => m.type !== 'system' && m.playerId !== playerId
+    );
+    if (!incoming || activePanel === 'chat') return;
+
+    setManualPanel('chat');
+    resetGameSwipe();
+    setLastReadCount(len);
+  }, [
+    gameState.chat,
+    gameState.chat.length,
+    gameState.phase,
+    activePanel,
+    playerId,
+    gameIsDragging,
+    resetGameSwipe,
+  ]);
 
   // Track eliminated players via roundHistory
   const seenRoundsRef = useRef<Set<number>>(new Set());
@@ -355,6 +387,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                     data-testid={`game-tab-${panel}`}
                     onClick={() => {
                       setActivePanel(panel);
+                      resetGameSwipe();
                       if (panel === 'chat') setLastReadCount(gameState.chat.length);
                     }}
                     className={clsx(
