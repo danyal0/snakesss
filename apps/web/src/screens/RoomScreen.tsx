@@ -19,7 +19,7 @@ import {
   clearActiveRoom,
 } from '../utils/userProfile';
 import { abandonRoom } from '../utils/abandonRoom';
-import { useConfirmLeaveHome, useLeaveRoom } from '../hooks/useLeaveRoom';
+import { useLeaveRoom } from '../hooks/useLeaveRoom';
 import { Button } from '../components/ui/Button';
 
 const ROOM_JOIN_TIMEOUT_MS = 6000;
@@ -31,7 +31,6 @@ export function RoomScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { joinRoom, createRoom } = useSocket();
-  const confirmLeaveHome = useConfirmLeaveHome();
   const confirmLeaveRoom = useLeaveRoom();
   const gameState = useGameStore((s) => s.gameState);
   const isConnected = useGameStore((s) => s.isConnected);
@@ -45,6 +44,11 @@ export function RoomScreen() {
   const autoJoinAttempted = useRef(false);
 
   const code = roomId?.toUpperCase() ?? '';
+  const goHomeFromRoom = useCallback(() => {
+    clearActiveRoom();
+    if (code) abandonRoom(code);
+    navigate('/', { replace: true });
+  }, [code, navigate]);
   const session = code ? loadSession(code) : null;
   const profile = loadUserProfile();
   const intent: RoomIntent =
@@ -226,12 +230,7 @@ export function RoomScreen() {
         onSubmit={(username, avatar) =>
           performJoin(username, avatar, !!inProgress)
         }
-        onCancel={() => {
-          void confirmLeaveHome(navigate, () => {
-            clearActiveRoom();
-            if (code) abandonRoom(code);
-          });
-        }}
+        onCancel={goHomeFromRoom}
       />
     );
   }
@@ -245,11 +244,7 @@ export function RoomScreen() {
           <p className="text-white/50 text-sm">{displayError}</p>
         </div>
         <button
-          onClick={() => {
-            void confirmLeaveHome(navigate, () => {
-              if (code) abandonRoom(code);
-            });
-          }}
+          onClick={goHomeFromRoom}
           className="glass-button rounded-xl px-6 py-3 text-white text-sm"
         >
           ← Back to Home

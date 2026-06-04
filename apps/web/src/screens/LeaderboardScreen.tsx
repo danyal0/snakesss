@@ -4,7 +4,6 @@ import clsx from 'clsx';
 import { useNavigate } from 'react-router-dom';
 import type { LeaderboardEntry } from '@snakesss/shared-types';
 import { Button } from '../components/ui/Button';
-import { useNavigateHome } from '../hooks/useLeaveRoom';
 
 const SERVER_URL = import.meta.env['VITE_SERVER_URL'] ?? '';
 
@@ -30,7 +29,6 @@ function timeSince(ms: number): string {
 
 export function LeaderboardScreen() {
   const navigate = useNavigate();
-  const goHome = useNavigateHome();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(Date.now());
@@ -61,7 +59,7 @@ export function LeaderboardScreen() {
       {/* Header */}
       <div className="flex-shrink-0 px-4 pt-4 pb-3">
         <div className="flex items-center gap-3 mb-4">
-          <Button variant="ghost" size="sm" onClick={() => void goHome()}>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
             ← Back
           </Button>
           <div className="flex-1 text-center">

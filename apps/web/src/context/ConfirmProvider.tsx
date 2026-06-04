@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useBlocker, useLocation, useNavigate, type NavigateFunction } from 'react-router-dom';
+import { useBlocker, useLocation, type NavigateFunction } from 'react-router-dom';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useGameStore } from '../store/gameStore';
 import { loadUserProfile } from '../utils/userProfile';
@@ -30,14 +30,6 @@ const LEAVE_ROOM_COPY: ConfirmOptions = {
   title: 'Leave room?',
   message:
     'You will exit this game and return home. You can rejoin with the room link if the room is still open.',
-  confirmLabel: 'Leave',
-  cancelLabel: 'Stay',
-  variant: 'danger',
-};
-
-const LEAVE_HOME_COPY: ConfirmOptions = {
-  title: 'Leave?',
-  message: 'Return to the home screen?',
   confirmLabel: 'Leave',
   cancelLabel: 'Stay',
   variant: 'danger',
@@ -91,10 +83,6 @@ export function leaveRoomConfirmOptions(): ConfirmOptions {
   return LEAVE_ROOM_COPY;
 }
 
-export function leaveHomeConfirmOptions(): ConfirmOptions {
-  return LEAVE_HOME_COPY;
-}
-
 /** Confirm, then socket leave + navigate home. */
 export function useLeaveRoom() {
   const confirm = useConfirm();
@@ -110,38 +98,6 @@ export function useLeaveRoom() {
     },
     [confirm, leaveRoom]
   );
-}
-
-/** Confirm before abandoning join flow or error exit (no socket leave yet). */
-export function useConfirmLeaveHome() {
-  const confirm = useConfirm();
-
-  return useCallback(
-    async (navigate: NavigateFunction, beforeNavigate?: () => void) => {
-      const ok = await confirm(leaveHomeConfirmOptions());
-      if (!ok) return false;
-      beforeNavigate?.();
-      navigate('/', { replace: true });
-      return true;
-    },
-    [confirm]
-  );
-}
-
-/** Navigate home; confirm leave-room if user still has an active session. */
-export function useNavigateHome() {
-  const navigate = useNavigate();
-  const confirmLeaveRoom = useLeaveRoom();
-  const confirmLeaveHome = useConfirmLeaveHome();
-
-  return useCallback(async () => {
-    const hasActiveSession =
-      !!useGameStore.getState().gameState?.roomId || !!loadUserProfile()?.activeRoomId;
-    if (hasActiveSession) {
-      return confirmLeaveRoom(navigate);
-    }
-    return confirmLeaveHome(navigate);
-  }, [navigate, confirmLeaveRoom, confirmLeaveHome]);
 }
 
 function RoomLeaveBlocker({
