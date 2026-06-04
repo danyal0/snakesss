@@ -12,6 +12,7 @@ import { LeaderboardWidget } from '../components/ui/LeaderboardWidget';
 import { loadSession } from '../hooks/useSession';
 import { loadUserProfile, saveUserProfile } from '../utils/userProfile';
 import { generateRandomUsername } from '../utils/randomName';
+import { triggerHaptic } from '../utils/haptics';
 
 export function HomeScreen() {
   const navigate = useNavigate();
@@ -242,7 +243,10 @@ export function HomeScreen() {
                   <label className="flex items-center gap-3 cursor-pointer">
                     <div
                       className={`w-10 h-6 rounded-full transition-colors ${asSpectator ? 'bg-green-500' : 'bg-white/20'} relative`}
-                      onClick={() => setAsSpectator(!asSpectator)}
+                      onClick={() => {
+                        triggerHaptic('toggle');
+                        setAsSpectator(!asSpectator);
+                      }}
                     >
                       <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${asSpectator ? 'translate-x-5' : 'translate-x-1'}`} />
                     </div>

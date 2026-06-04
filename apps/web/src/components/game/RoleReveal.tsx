@@ -70,6 +70,10 @@ export function RoleReveal({ role, show, onDismiss }: RoleRevealProps) {
     ? (ROLE_CONFIG[role.type as keyof typeof ROLE_CONFIG] ?? ROLE_CONFIG.human)
     : null;
 
+  useEffect(() => {
+    if (show && config) triggerHaptic('reveal');
+  }, [show, config]);
+
   return (
     <AnimatePresence>
       {show && config && (
