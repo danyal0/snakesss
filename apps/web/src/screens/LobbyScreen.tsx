@@ -3,12 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import { useNavigate } from 'react-router-dom';
 import { useRoomExit } from '../hooks/useRoomExit';
+import { PlayerAvatar } from '../components/ui/PlayerAvatar';
 import type { GameState, RoomSettings, BotPersona } from '@snakesss/shared-types';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { AvatarDisplay } from '../components/ui/Avatar';
-import { PlayerAvatar } from '../components/ui/PlayerAvatar';
 import { useSocket } from '../hooks/useSocket';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
 import { SwipeCarousel } from '../components/ui/SwipeCarousel';
@@ -267,19 +267,9 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   className="glass rounded-2xl px-4 py-3 flex items-center gap-3"
                 >
                   {player.id === playerId ? (
-                    <PlayerAvatar
-                      emoji={player.avatar}
-                      playerId={player.id}
-                      size="sm"
-                      isMe
-                      showMic
-                    />
+                    <PlayerAvatar emoji={player.avatar} playerId={player.id} size="sm" isMe showMic />
                   ) : (
-                    <AvatarDisplay
-                      emoji={player.avatar}
-                      size="sm"
-                      isMe={false}
-                    />
+                    <AvatarDisplay emoji={player.avatar} size="sm" isMe={false} />
                   )}
 
                   <div className="flex-1 min-w-0">
