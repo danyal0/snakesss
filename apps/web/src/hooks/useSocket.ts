@@ -20,6 +20,7 @@ import {
 import { saveUserProfile, setActiveRoom, clearActiveRoom } from '../utils/userProfile';
 import { clearSession } from './useSession';
 import { syncEphemeralFromGameState } from '../store/syncEphemeralState';
+import { setJoinInFlight } from '../utils/roomSession';
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -116,6 +117,11 @@ export function useSocketListeners(): void {
 
     socket.on('player:role', (role) => {
       useGameStore.getState().setMyRole(role, true);
+    });
+
+    socket.on('player:snake_peers', (peerIds) => {
+      const store = useGameStore.getState();
+      if (store.myRole?.type === 'snake') store.setFellowSnakeIds(peerIds);
     });
 
     socket.on('quiz:question', (_question, snakeAnswer) => {
@@ -243,10 +249,12 @@ export function useSocket() {
 
   const joinRoom = (roomId: string, username: string, avatar: string, asSpectator = false) =>
     new Promise<void>((resolve, reject) => {
+      setJoinInFlight(roomId);
       socket.emit(
         'room:join',
         { roomId, username, avatar: avatar as Parameters<ClientToServerEvents['room:join']>[0]['avatar'], asSpectator, playerId: loadSession(roomId)?.playerId },
         (result) => {
+          setJoinInFlight(null);
           if ('error' in result) reject(new Error(result.error));
           else {
             applyRoomIdentity(result, roomId, username, avatar, socket.id ?? null);

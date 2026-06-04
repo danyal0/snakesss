@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import clsx from 'clsx';
 import type { QuizQuestion, AnswerIndex, VoteChoice } from '@snakesss/shared-types';
 import { Timer } from '../ui/Timer';
+import { triggerHaptic } from '../../utils/haptics';
 
 interface AnswerVotePanelProps {
   question: Omit<QuizQuestion, 'correctIndex'>;

@@ -6,6 +6,8 @@ import {
   CreateRoomPayload,
   GamePhase,
   AnswerIndex,
+  VoiceSignalPayload,
+  VoiceSpeakingPayload,
 } from '@snakesss/shared-types';
 import { buildVoteTally, stripAnswerRoles } from '@snakesss/game-engine';
 import { RoomManager } from './RoomManager';
@@ -26,6 +28,7 @@ interface SocketMeta {
 }
 
 const socketMeta = new WeakMap<AppSocket, SocketMeta>();
+const voiceParticipants = new Map<string, Set<string>>();
 
 function emitPublicState(
   roomId: string,
@@ -184,6 +187,9 @@ export function registerSocketHandlers(
       const role = engine.getRole(effectivePlayerId);
       if (role && state.phase !== 'lobby') {
         socket.emit('player:role', role);
+        if (role.type === 'snake') {
+          emitSnakePeers(roomId, io, roomManager);
+        }
       }
 
       broadcastAdminState(io, roomManager);
@@ -401,6 +407,41 @@ export function registerSocketHandlers(
       broadcastAdminState(io, roomManager);
     });
 
+    socket.on('voice:join', (cb) => {
+      const meta = socketMeta.get(socket);
+      if (!meta?.roomId || !meta.playerId) {
+        cb?.([]);
+        return;
+      }
+      const { roomId, playerId } = meta;
+      if (!voiceParticipants.has(roomId)) voiceParticipants.set(roomId, new Set());
+      voiceParticipants.get(roomId)!.add(playerId);
+      const peers = [...voiceParticipants.get(roomId)!].filter((id) => id !== playerId);
+      socket.to(`room:${roomId}`).emit('voice:peers', peers.concat(playerId));
+      cb?.(peers);
+    });
+
+    socket.on('voice:leave', () => {
+      const meta = socketMeta.get(socket);
+      if (!meta?.roomId || !meta.playerId) return;
+      removeVoiceParticipant(meta.roomId, meta.playerId, io);
+    });
+
+    socket.on('voice:signal', (payload: VoiceSignalPayload) => {
+      const meta = socketMeta.get(socket);
+      if (!meta?.roomId || !meta.playerId) return;
+      const targetSocket = roomManager.getSocketId(meta.roomId, payload.targetId);
+      if (!targetSocket) return;
+      io.to(targetSocket).emit('voice:signal', meta.playerId, payload.signal);
+    });
+
+    socket.on('voice:speaking', (payload: VoiceSpeakingPayload) => {
+      const meta = socketMeta.get(socket);
+      if (!meta?.roomId || !meta.playerId) return;
+      if (payload.playerId !== meta.playerId) return;
+      socket.to(`room:${meta.roomId}`).emit('voice:speaking', payload);
+    });
+
     // ── Spectate ────────────────────────────────────────────────────────────
     socket.on('spectate:room', (roomId) => {
       const engine = roomManager.getEngine(roomId);
@@ -418,6 +459,7 @@ export function registerSocketHandlers(
     socket.on('disconnect', () => {
       const meta = socketMeta.get(socket);
       if (meta?.roomId && meta?.playerId) {
+        removeVoiceParticipant(meta.roomId, meta.playerId, io);
         handleDisconnect(meta.roomId, meta.playerId, socket, io, roomManager);
       }
     });
@@ -443,6 +485,39 @@ function emitPrivateRoles(
       io.to(socketId).emit('player:role', role);
     }
   });
+
+  emitSnakePeers(roomId, io, roomManager);
+}
+
+function emitSnakePeers(
+  roomId: string,
+  io: Server<ClientToServerEvents, ServerToClientEvents>,
+  roomManager: RoomManager
+): void {
+  const engine = roomManager.getEngine(roomId);
+  if (!engine) return;
+  const state = engine.getState();
+  const aliveSnakes = state.players.filter(
+    (p) => p.isAlive && !p.isSpectator && engine.getRole(p.id)?.type === 'snake'
+  );
+  aliveSnakes.forEach((snake) => {
+    const socketId = roomManager.getSocketId(roomId, snake.id);
+    if (!socketId) return;
+    const peers = aliveSnakes.filter((p) => p.id !== snake.id).map((p) => p.id);
+    io.to(socketId).emit('player:snake_peers', peers);
+  });
+}
+
+function removeVoiceParticipant(
+  roomId: string,
+  playerId: string,
+  io: Server<ClientToServerEvents, ServerToClientEvents>
+): void {
+  const set = voiceParticipants.get(roomId);
+  if (!set) return;
+  set.delete(playerId);
+  if (set.size === 0) voiceParticipants.delete(roomId);
+  io.to(`room:${roomId}`).emit('voice:peers', [...(set ?? [])]);
 }
 
 // ─── Phase Transitions ────────────────────────────────────────────────────────
@@ -524,6 +599,7 @@ async function handlePhaseTransition(
       const afterVotes = engine.getState();
       const lastRound = afterVotes.roundHistory[afterVotes.roundHistory.length - 1];
       if (lastRound) io.to(`room:${roomId}`).emit('round:result', lastRound);
+      emitSnakePeers(roomId, io, roomManager);
       break;
     }
 

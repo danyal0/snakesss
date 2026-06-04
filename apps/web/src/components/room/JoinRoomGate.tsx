@@ -91,7 +91,13 @@ export function JoinRoomGate({
         </Button>
 
         {onCancel && (
-          <Button variant="ghost" size="sm" className="w-full" onClick={onCancel}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full"
+            data-testid="btn-join-gate-back"
+            onClick={onCancel}
+          >
             ← Back
           </Button>
         )}

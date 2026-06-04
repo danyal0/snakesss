@@ -8,9 +8,8 @@ import React, {
 } from 'react';
 import { useBlocker, useLocation, type NavigateFunction } from 'react-router-dom';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { useGameStore } from '../store/gameStore';
-import { loadUserProfile } from '../utils/userProfile';
 import { useSocket } from '../hooks/useSocket';
+import { shouldConfirmRoomLeave } from '../utils/roomSession';
 
 export interface ConfirmOptions {
   title: string;
@@ -118,22 +117,16 @@ function RoomLeaveBlocker({
 }) {
   const location = useLocation();
   const { leaveRoom } = useSocket();
-  const gameState = useGameStore((s) => s.gameState);
   const handlingRef = useRef(false);
-
-  const inRoomRoute = location.pathname.startsWith('/room/');
-  const hasActiveSession =
-    !!gameState?.roomId || !!loadUserProfile()?.activeRoomId;
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) => {
       if (skipLeaveBlockerRef.current) return false;
       return (
         import.meta.env.VITE_E2E !== 'true' &&
-        inRoomRoute &&
-        hasActiveSession &&
         currentLocation.pathname.startsWith('/room/') &&
-        !nextLocation.pathname.startsWith('/room/')
+        !nextLocation.pathname.startsWith('/room/') &&
+        shouldConfirmRoomLeave(currentLocation.pathname)
       );
     }
   );

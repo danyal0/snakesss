@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import { useNavigate } from 'react-router-dom';
-import { useLeaveRoom } from '../hooks/useLeaveRoom';
+import { useRoomExit } from '../hooks/useRoomExit';
 import type { GameState, RoomSettings, BotPersona } from '@snakesss/shared-types';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { AvatarDisplay } from '../components/ui/Avatar';
+import { PlayerAvatar } from '../components/ui/PlayerAvatar';
 import { useSocket } from '../hooks/useSocket';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
 import { SwipeCarousel } from '../components/ui/SwipeCarousel';
@@ -39,7 +40,7 @@ const BOT_PERSONAS: { id: BotPersona; label: string; desc: string; emoji: string
 
 export function LobbyScreen({ gameState }: LobbyScreenProps) {
   const navigate = useNavigate();
-  const confirmLeaveRoom = useLeaveRoom();
+  const exitRoom = useRoomExit();
   const { startGame, updateSettings, addBot, kickPlayerFromRoom } = useSocket();
   const playerId = useGameStore((s) => s.playerId);
   const lastSocketError = useGameStore((s) => s.lastSocketError);
@@ -132,7 +133,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
             variant="ghost"
             size="sm"
             onClick={() => {
-              void confirmLeaveRoom(navigate);
+              exitRoom();
             }}
           >
             ← Leave
@@ -265,11 +266,21 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   transition={{ delay: i * 0.04 }}
                   className="glass rounded-2xl px-4 py-3 flex items-center gap-3"
                 >
-                  <AvatarDisplay
-                    emoji={player.avatar}
-                    size="sm"
-                    isMe={player.id === playerId}
-                  />
+                  {player.id === playerId ? (
+                    <PlayerAvatar
+                      emoji={player.avatar}
+                      playerId={player.id}
+                      size="sm"
+                      isMe
+                      showMic
+                    />
+                  ) : (
+                    <AvatarDisplay
+                      emoji={player.avatar}
+                      size="sm"
+                      isMe={false}
+                    />
+                  )}
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">

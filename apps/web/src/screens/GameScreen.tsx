@@ -16,7 +16,7 @@ import { GAME_PANELS, defaultPanelForPhase, gamePanelLabel, type GamePanel } fro
 import { AnswerReveal } from '../components/game/AnswerReveal';
 import { Timer } from '../components/ui/Timer';
 import { GlassCard } from '../components/ui/GlassCard';
-import { AvatarDisplay } from '../components/ui/Avatar';
+
 import { useSocket } from '../hooks/useSocket';
 import {
   useGameStore,
@@ -28,10 +28,9 @@ import { useLeaveRoom } from '../hooks/useLeaveRoom';
 import { loadSession } from '../hooks/useSession';
 import { isWatchOnlyGameView, watchModeLabel } from '../utils/gameViewMode';
 import { SpectatorPhasePanel } from '../components/game/SpectatorPhasePanel';
-import { abandonRoom } from '../utils/abandonRoom';
-import { useConfirm } from '../context/ConfirmProvider';
-import { leaveRoomConfirmOptions } from '../hooks/useLeaveRoom';
-import { markLeavingRoomConfirmed } from '../context/ConfirmProvider';
+import { useRoomExit } from '../hooks/useRoomExit';
+import { PlayerAvatar } from '../components/ui/PlayerAvatar';
+import { triggerHaptic } from '../utils/haptics';
 
 interface GameScreenProps {
   gameState: GameState;
@@ -40,7 +39,7 @@ interface GameScreenProps {
 export function GameScreen({ gameState }: GameScreenProps) {
   const navigate = useNavigate();
   const confirmLeaveRoom = useLeaveRoom();
-  const confirm = useConfirm();
+  const exitRoom = useRoomExit();
   const { sendMessage, castVote, sendTyping, submitAnswer, leaveRoom, playAgain } = useSocket();
   const store = useGameStore();
   /** User tab pick within current phase; cleared when phase/round changes. */
@@ -67,23 +66,13 @@ export function GameScreen({ gameState }: GameScreenProps) {
   const isAlive = me?.isAlive ?? false;
   const isSpectator = me?.isSpectator ?? false;
   const isSnake = myRole?.type === 'snake';
+  const fellowSnakeIds = store.fellowSnakeIds;
   const needsRejoin = !playerId || !me;
   const hasSavedSession = !!loadSession(gameState.roomId);
   const isWatchOnly = isWatchOnlyGameView(gameState, playerId, me);
   const watchLabel = watchModeLabel(me, needsRejoin);
 
-  const handleLeaveRoom = () => {
-    if (!needsRejoin) {
-      void confirmLeaveRoom(navigate);
-      return;
-    }
-    void confirm(leaveRoomConfirmOptions()).then((ok) => {
-      if (!ok) return;
-      markLeavingRoomConfirmed();
-      abandonRoom(gameState.roomId);
-      navigate('/', { replace: true });
-    });
-  };
+  const handleLeaveRoom = () => exitRoom();
 
   const canChat =
     gameState.phase === 'discussion' &&
@@ -139,6 +128,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
         seenRoundsRef.current.add(round.round);
         const eliminated = gameState.players.find((p) => p.id === round.eliminatedId);
         if (eliminated) {
+          triggerHaptic('elimination');
           store.setShowElimination(true, eliminated);
           setTimeout(() => store.setShowElimination(false), 4000);
         }
@@ -158,14 +148,14 @@ export function GameScreen({ gameState }: GameScreenProps) {
     }
   }, [gameState.phase]);
 
-  const handleVote = useCallback((targetId: string) => castVote(targetId), [castVote]);
+  const handleVote = useCallback((targetId: string) => { triggerHaptic('confirm'); castVote(targetId); }, [castVote]);
   const handleSend = useCallback(
     (content: string, type: 'chat' | 'accusation' | 'defense' = 'chat') =>
       sendMessage(content, type),
     [sendMessage]
   );
   const handleVoteChoice = useCallback(
-    (choice: VoteChoice) => submitAnswer(choice),
+    (choice: VoteChoice) => { triggerHaptic('select'); submitAnswer(choice); },
     [submitAnswer]
   );
 
@@ -297,6 +287,9 @@ export function GameScreen({ gameState }: GameScreenProps) {
           {gameState.players.filter((p) => !p.isSpectator).map((player) => {
             const votes = voteCounts[player.id] ?? 0;
             const isEliminated = !player.isAlive;
+            const isMe = player.id === playerId;
+            const covertAlly =
+              isSnake && !isWatchOnly && player.isAlive && fellowSnakeIds.includes(player.id) && !isMe;
             return (
               <div
                 key={player.id}
@@ -305,33 +298,19 @@ export function GameScreen({ gameState }: GameScreenProps) {
                   isEliminated && 'opacity-40'
                 )}
               >
-                {/* Avatar bubble */}
-                <div className="relative">
-                  <div className={clsx(
-                    'w-11 h-11 rounded-full flex items-center justify-center text-2xl glass-elevated',
-                    isEliminated && 'grayscale',
-                    player.id === playerId && 'ring-2 ring-green-400/70',
-                    votes > 0 && !isEliminated && 'ring-2 ring-red-400/80'
-                  )}>
-                    {isEliminated ? '💀' : player.avatar}
-                  </div>
-
-                  {/* Vote count badge */}
-                  {votes > 0 && !isEliminated && (
-                    <div className="absolute top-0 -right-1 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white px-1 shadow-lg">
-                      {votes}
-                    </div>
-                  )}
-
-                  {/* Answered checkmark */}
-                  {gameState.phase === 'voting' && gameState.answeredPlayerIds?.includes(player.id) && (
-                    <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow">
-                      ✓
-                    </div>
-                  )}
-                </div>
-
-                {/* Username — clean, not squished */}
+                <PlayerAvatar
+                  emoji={player.avatar}
+                  playerId={player.id}
+                  size="sm"
+                  isMe={isMe}
+                  isAlive={player.isAlive}
+                  isEliminated={isEliminated}
+                  showMic={isMe && !isWatchOnly}
+                  covertAlly={covertAlly}
+                  voteBadge={votes > 0 && !isEliminated ? votes : undefined}
+                  answered={gameState.phase === 'voting' && !!gameState.answeredPlayerIds?.includes(player.id)}
+                  accent={votes > 0 && !isEliminated ? 'red' : 'green'}
+                />
                 <span className="text-[10px] text-white/55 text-center leading-tight max-w-[3rem] truncate px-0.5">
                   {player.username.length > 7 ? player.username.slice(0, 7) + '…' : player.username}
                 </span>
@@ -493,6 +472,9 @@ export function GameScreen({ gameState }: GameScreenProps) {
                           players={gameState.players.filter((p) => !p.isSpectator)}
                           myPlayerId={playerId}
                           myRoleType={myRole?.type}
+                          fellowSnakeIds={fellowSnakeIds}
+                          isSnake={isSnake}
+                          isWatchOnly={isWatchOnly}
                           voteCounts={voteCounts}
                           canVote={false}
                           onVote={handleVote}
@@ -537,6 +519,9 @@ function PlayerGrid({
   players,
   myPlayerId,
   myRoleType,
+  fellowSnakeIds,
+  isSnake,
+  isWatchOnly,
   voteCounts,
   canVote,
   onVote,
@@ -548,6 +533,9 @@ function PlayerGrid({
   players: Player[];
   myPlayerId: string | null;
   myRoleType?: string;
+  fellowSnakeIds: string[];
+  isSnake: boolean;
+  isWatchOnly: boolean;
   voteCounts: Record<string, number>;
   canVote: boolean;
   onVote: (id: string) => void;
@@ -585,7 +573,16 @@ function PlayerGrid({
             )}
             onClick={() => canVote && !isMe && player.isAlive && onVote(player.id)}
           >
-            <AvatarDisplay emoji={player.avatar} size="md" isAlive={player.isAlive} isEliminated={!player.isAlive} isMe={isMe} />
+            <PlayerAvatar
+              emoji={player.avatar}
+              playerId={player.id}
+              size="md"
+              isAlive={player.isAlive}
+              isEliminated={!player.isAlive}
+              isMe={isMe}
+              showMic={isMe && !isWatchOnly}
+              covertAlly={isSnake && !isWatchOnly && player.isAlive && fellowSnakeIds.includes(player.id) && !isMe}
+            />
 
             <div className="w-full">
               <p className="text-xs font-semibold text-white truncate">{player.username}</p>

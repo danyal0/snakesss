@@ -1,11 +1,13 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import clsx from 'clsx';
+import { triggerHaptic, type HapticKind } from '../../utils/haptics';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
+  haptic?: HapticKind;
   children: React.ReactNode;
 }
 
@@ -13,9 +15,11 @@ export function Button({
   variant = 'secondary',
   size = 'md',
   loading = false,
+  haptic = 'tap',
   children,
   className,
   disabled,
+  onClick,
   ...props
 }: ButtonProps) {
   return (
@@ -37,6 +41,14 @@ export function Button({
         className
       )}
       disabled={disabled || loading}
+      onClick={(e) => {
+        if (!disabled && !loading) {
+          triggerHaptic(
+            variant === 'danger' ? 'warning' : variant === 'primary' ? 'confirm' : haptic
+          );
+        }
+        onClick?.(e);
+      }}
       {...(props as React.ComponentProps<typeof motion.button>)}
     >
       {loading && (

@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import type { Role } from '@snakesss/shared-types';
 import { Button } from '../ui/Button';
+import { triggerHaptic } from '../../utils/haptics';
 
 interface RoleRevealProps {
   role: Role | null;

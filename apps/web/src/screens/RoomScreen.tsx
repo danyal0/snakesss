@@ -19,7 +19,7 @@ import {
   clearActiveRoom,
 } from '../utils/userProfile';
 import { abandonRoom } from '../utils/abandonRoom';
-import { useLeaveRoom } from '../hooks/useLeaveRoom';
+import { useRoomExit } from '../hooks/useRoomExit';
 import { Button } from '../components/ui/Button';
 
 const ROOM_JOIN_TIMEOUT_MS = 6000;
@@ -31,7 +31,7 @@ export function RoomScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { joinRoom, createRoom } = useSocket();
-  const confirmLeaveRoom = useLeaveRoom();
+  const exitRoom = useRoomExit();
   const gameState = useGameStore((s) => s.gameState);
   const isConnected = useGameStore((s) => s.isConnected);
   const playerId = useGameStore((s) => s.playerId);
@@ -269,7 +269,7 @@ export function RoomScreen() {
             variant="ghost"
             size="sm"
             className="flex-shrink-0 text-amber-200/90"
-            onClick={() => void confirmLeaveRoom(navigate)}
+            onClick={() => exitRoom()}
           >
             ← Leave
           </Button>

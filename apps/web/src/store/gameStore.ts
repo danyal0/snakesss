@@ -26,6 +26,7 @@ interface GameStore {
   // Game state mirror
   gameState: GameState | null;
   myRole: Role | null;
+  fellowSnakeIds: string[];
 
   // Quiz state
   snakeAnswer: AnswerIndex | null;    // only for snakes — the correct answer
@@ -57,6 +58,7 @@ interface GameStore {
   setGameState: (s: GameState) => void;
   patchGameState: (p: Partial<GameState>) => void;
   setMyRole: (role: Role, showReveal?: boolean) => void;
+  setFellowSnakeIds: (ids: string[]) => void;
   setSnakeAnswer: (a: AnswerIndex | null) => void;
   setQuizReveal: (answers: PlayerAnswer[], correctIndex: AnswerIndex, scores: RoundScore[]) => void;
   addMessage: (m: ChatMessage) => void;
@@ -80,6 +82,7 @@ export const useGameStore = create<GameStore>()(
     username: null,
     gameState: null,
     myRole: null,
+    fellowSnakeIds: [],
     snakeAnswer: null,
     hasSubmittedAnswer: false,
     answerCount: 0,
@@ -122,7 +125,10 @@ export const useGameStore = create<GameStore>()(
       set((st) => ({
         myRole: role,
         showRoleReveal: showReveal || !st.myRole,
+        fellowSnakeIds: role.type === 'snake' ? st.fellowSnakeIds : [],
       })),
+
+    setFellowSnakeIds: (ids) => set({ fellowSnakeIds: ids }),
 
     setSnakeAnswer: (a) => set({ snakeAnswer: a }),
 
@@ -169,6 +175,7 @@ export const useGameStore = create<GameStore>()(
       set({
         gameState: null,
         myRole: null,
+        fellowSnakeIds: [],
         snakeAnswer: null,
         hasSubmittedAnswer: false,
         answerCount: 0,

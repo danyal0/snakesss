@@ -199,6 +199,69 @@
     0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
     30% { transform: translateY(-6px); opacity: 1; }
   }
+
+  /* Quiz / deduction reveal — subtle glass glow, no flash */
+  .reveal-correct-card {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .reveal-correct-active {
+    box-shadow:
+      0 0 0 1px rgba(0, 255, 136, 0.2),
+      0 8px 32px rgba(0, 0, 0, 0.35),
+      0 0 24px rgba(0, 255, 136, 0.12);
+    transform: scale(1.012);
+    transition: transform 0.45s ease, box-shadow 0.45s ease, opacity 0.45s ease;
+  }
+
+  .reveal-correct-active::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      105deg,
+      transparent 40%,
+      rgba(255, 255, 255, 0.07) 50%,
+      transparent 60%
+    );
+    background-size: 200% 100%;
+    animation: revealShimmer 1.4s ease-out 1;
+  }
+
+  .reveal-correct-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .reveal-player-correct {
+    background: rgba(0, 255, 136, 0.06);
+    box-shadow: 0 0 16px rgba(0, 255, 136, 0.08);
+  }
+
+  .reveal-option-dim {
+    opacity: 0.55;
+  }
+
+  @keyframes revealShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-correct-active {
+    transform: none;
+    animation: none;
+  }
+  .reveal-correct-active::after {
+    animation: none;
+    display: none;
+  }
 }
 
 /* 120 FPS optimizations */

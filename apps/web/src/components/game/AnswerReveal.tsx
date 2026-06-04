@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import type { PlayerAnswer, AnswerIndex, RoundScore, QuizQuestion } from '@snakesss/shared-types';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { triggerHaptic } from '../../utils/haptics';
 
 interface AnswerRevealProps {
   question: Omit<QuizQuestion, 'correctIndex'> | null;
@@ -12,6 +14,7 @@ interface AnswerRevealProps {
 }
 
 const OPTION_LABELS = ['A', 'B', 'C'] as const;
+const REVEAL_HIGHLIGHT_MS = 1500;
 
 export function AnswerReveal({
   question,
@@ -20,17 +23,31 @@ export function AnswerReveal({
   scores,
   myPlayerId,
 }: AnswerRevealProps) {
+  const reducedMotion = useReducedMotion();
   const [revealStep, setRevealStep] = useState(0);
+  const [highlightCorrect, setHighlightCorrect] = useState(false);
 
   useEffect(() => {
     setRevealStep(0);
+    setHighlightCorrect(false);
     const timers = [
-      setTimeout(() => setRevealStep(1), 400),   // show correct answer
-      setTimeout(() => setRevealStep(2), 1200),   // reveal each player
-      setTimeout(() => setRevealStep(3), 2200),   // show scores
+      setTimeout(() => {
+        setRevealStep(1);
+        setHighlightCorrect(true);
+        triggerHaptic('reveal');
+      }, reducedMotion ? 0 : 400),
+      setTimeout(() => setRevealStep(2), reducedMotion ? 200 : 1200),
+      setTimeout(() => setRevealStep(3), reducedMotion ? 400 : 2200),
     ];
-    return () => timers.forEach(clearTimeout);
-  }, [answers, correctIndex]);
+    const highlightOff = setTimeout(
+      () => setHighlightCorrect(false),
+      reducedMotion ? 800 : REVEAL_HIGHLIGHT_MS + 400
+    );
+    return () => {
+      timers.forEach(clearTimeout);
+      clearTimeout(highlightOff);
+    };
+  }, [answers, correctIndex, reducedMotion]);
 
   if (!question) {
     return (
@@ -58,8 +75,7 @@ export function AnswerReveal({
   const iGotItRight = myAnswer?.isCorrect ?? false;
 
   return (
-    <div className="flex flex-col h-full p-4 gap-4 overflow-y-auto scrollbar-none">
-      {/* Question */}
+    <div className="flex flex-col h-full p-4 gap-4 overflow-y-auto scrollbar-none" data-testid="answer-reveal">
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -68,23 +84,31 @@ export function AnswerReveal({
         <p className="text-sm text-white/70 leading-relaxed text-center">{question.text}</p>
       </motion.div>
 
-      {/* Correct answer reveal */}
       <AnimatePresence>
         {revealStep >= 1 && (
           <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
+            initial={reducedMotion ? { opacity: 1 } : { scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="glass-elevated rounded-2xl p-4 border border-green-500/30 flex-shrink-0"
+            className={clsx(
+              'rounded-2xl p-4 flex-shrink-0 reveal-correct-card',
+              highlightCorrect && 'reveal-correct-active'
+            )}
+            data-testid="reveal-correct-answer"
           >
             <p className="text-[10px] text-white/40 uppercase tracking-wider text-center mb-2">
               Correct Answer
             </p>
             <div className="flex items-center justify-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-green-500/25 border border-green-500/40 flex items-center justify-center font-black text-green-300 text-lg">
+              <div
+                className={clsx(
+                  'w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg reveal-correct-letter',
+                  highlightCorrect ? 'text-emerald-200' : 'text-green-300'
+                )}
+              >
                 {OPTION_LABELS[correctIndex]}
               </div>
-              <p className="text-base font-semibold text-green-300">
+              <p className="text-base font-semibold text-emerald-200/95">
                 {question.options[correctIndex]}
               </p>
             </div>
@@ -93,10 +117,10 @@ export function AnswerReveal({
               <motion.div
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
+                transition={{ delay: reducedMotion ? 0 : 0.3 }}
                 className={clsx(
                   'mt-3 text-center text-sm font-semibold',
-                  iGotItRight ? 'text-green-400' : 'text-red-400'
+                  iGotItRight ? 'text-green-400' : 'text-red-400/90'
                 )}
               >
                 {iGotItRight ? '✓ You got it right!' : `✗ You answered ${OPTION_LABELS[myAnswer.answerIndex]}`}
@@ -106,7 +130,6 @@ export function AnswerReveal({
         )}
       </AnimatePresence>
 
-      {/* Player answers */}
       <AnimatePresence>
         {revealStep >= 2 && (
           <motion.div
@@ -119,20 +142,31 @@ export function AnswerReveal({
             </p>
             {answers.map((answer, i) => {
               const isCorrect = answer.isCorrect && !answer.isSnakeVote;
+              const isCorrectPlayer = isCorrect;
+              const dimOthers = highlightCorrect && !answer.isSnakeVote;
+
               return (
                 <motion.div
                   key={answer.playerId}
-                  initial={{ opacity: 0, x: -16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.08 }}
+                  initial={reducedMotion ? { opacity: 1 } : { opacity: 0, x: -16 }}
+                  animate={{
+                    opacity: dimOthers && !isCorrectPlayer ? 0.55 : 1,
+                    x: 0,
+                    scale: isCorrectPlayer && highlightCorrect && !reducedMotion ? 1.015 : 1,
+                  }}
+                  transition={{ delay: reducedMotion ? 0 : i * 0.08 }}
                   className={clsx(
-                    'flex items-center gap-3 p-3 rounded-2xl',
+                    'flex items-center gap-3 p-3 rounded-2xl transition-all duration-500',
                     answer.isSnakeVote
                       ? 'bg-red-500/10 border border-red-500/20'
-                      : isCorrect
-                        ? 'bg-green-500/10 border border-green-500/20'
-                        : 'glass border border-white/8'
+                      : isCorrectPlayer
+                        ? clsx(
+                            'border border-emerald-400/25',
+                            highlightCorrect ? 'reveal-player-correct' : 'bg-green-500/10 border-green-500/20'
+                          )
+                        : clsx('glass border border-white/8', dimOthers && 'reveal-option-dim')
                   )}
+                  data-testid={isCorrectPlayer ? `reveal-player-correct-${answer.playerId}` : undefined}
                 >
                   <span className="text-xl flex-shrink-0">{answer.playerAvatar}</span>
                   <div className="flex-1 min-w-0">
@@ -152,7 +186,7 @@ export function AnswerReveal({
                         answer.isSnakeVote
                           ? 'bg-red-500/25 text-red-300'
                           : isCorrect
-                            ? 'bg-green-500/25 text-green-300'
+                            ? 'bg-emerald-500/25 text-emerald-200'
                             : 'bg-orange-500/20 text-orange-300'
                       )}
                     >
@@ -169,7 +203,6 @@ export function AnswerReveal({
         )}
       </AnimatePresence>
 
-      {/* Round scores */}
       <AnimatePresence>
         {revealStep >= 3 && scores.length > 0 && (
           <motion.div

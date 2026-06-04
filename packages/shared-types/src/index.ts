@@ -320,6 +320,17 @@ export interface AdminActionPayload {
   data?: Record<string, unknown>;
 }
 
+export interface VoiceSignalPayload {
+  targetId: string;
+  signal: unknown;
+}
+
+export interface VoiceSpeakingPayload {
+  playerId: string;
+  level: number;
+  speaking: boolean;
+}
+
 // ─── Socket Events ────────────────────────────────────────────────────────────
 
 export interface ClientToServerEvents {
@@ -337,6 +348,10 @@ export interface ClientToServerEvents {
   'vote:cast': (payload: CastVotePayload) => void;
   'admin:action': (payload: AdminActionPayload) => void;
   'spectate:room': (roomId: string) => void;
+  'voice:join': (cb?: (peers: string[]) => void) => void;
+  'voice:leave': () => void;
+  'voice:signal': (payload: VoiceSignalPayload) => void;
+  'voice:speaking': (payload: VoiceSpeakingPayload) => void;
 }
 
 export interface ServerToClientEvents {
@@ -345,6 +360,10 @@ export interface ServerToClientEvents {
   'player:joined': (player: Player) => void;
   'player:left': (playerId: string) => void;
   'player:role': (role: Role, correctAnswer?: AnswerIndex) => void; // snakes get correctAnswer
+  'player:snake_peers': (peerIds: string[]) => void;
+  'voice:peers': (peerIds: string[]) => void;
+  'voice:signal': (fromId: string, signal: unknown) => void;
+  'voice:speaking': (payload: VoiceSpeakingPayload) => void;
   'phase:changed': (phase: GamePhase, endsAt: number | null) => void;
   'quiz:question': (question: Omit<QuizQuestion, 'correctIndex'>, snakeAnswer?: AnswerIndex) => void;
   'quiz:answer_update': (count: number, total: number) => void;
