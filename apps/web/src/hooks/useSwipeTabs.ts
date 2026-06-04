@@ -54,10 +54,6 @@ export function useSwipeTabs<T extends string>(
   /** Clear drag offset when tab changes programmatically (phase switch, round change). */
   const resetDrag = resetGesture;
 
-  useEffect(() => {
-    resetGesture();
-  }, [activeTab, resetGesture]);
-
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const t = e.touches[0];
     if (!t) return;
@@ -139,12 +135,14 @@ export function useSwipeTabs<T extends string>(
       }
 
       if (dx < 0 && idx < tabs.length - 1) {
+        setDragOffset(0);
         setActiveTab(tabs[idx + 1]!);
       } else if (dx > 0 && idx > 0) {
+        setDragOffset(0);
         setActiveTab(tabs[idx - 1]!);
+      } else {
+        setDragOffset(0);
       }
-
-      setDragOffset(0);
     },
     [tabs, setActiveTab]
   );

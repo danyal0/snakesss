@@ -1,6 +1,6 @@
 import { test, expect } from '../../fixtures/test-fixture';
 import { startE2EGame, forceE2EPhase } from '../../utils/seed';
-import { expectGameTabMatchesPanel } from '../../utils/panel-sync';
+import { expectGameTabMatchesPanel, expectGamePanelCenteredInCarousel } from '../../utils/panel-sync';
 import { swipeHorizontal } from '../../utils/swipe';
 import { dismissBlockingGameOverlays } from '../../utils/game-ui';
 
@@ -44,7 +44,7 @@ test.describe('Game tab ↔ panel sync', () => {
     await expect(page.getByTestId('chat-empty-state')).toBeVisible();
     await expect(page.getByTestId('chat-input')).toBeVisible();
     await expect(page.getByTestId('chat-send')).toBeVisible();
-    await expect(page.getByTestId('game-panel-vote')).not.toBeVisible();
+    await expectGamePanelCenteredInCarousel(page, 'chat');
   });
 
   test('discussion: player can send first message before bots', async ({ page }) => {
@@ -143,5 +143,49 @@ test.describe('Game swipe on touch devices', () => {
     await expectGameTabMatchesPanel(page, 'chat');
     await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left');
     await expectGameTabMatchesPanel(page, 'vote');
+    await expectGamePanelCenteredInCarousel(page, 'vote');
+  });
+
+  test('short swipe release keeps chat panel visible (no blank carousel)', async ({ page }) => {
+    await expectGameTabMatchesPanel(page, 'chat');
+    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'right', 30);
+    await expectGameTabMatchesPanel(page, 'chat');
+    await expect(page.getByTestId('chat-input')).toBeVisible();
+    await expectGamePanelCenteredInCarousel(page, 'chat');
+  });
+
+  test('swipe players → chat → vote panels stay visible after each release', async ({ page }) => {
+    await page.getByTestId('game-tab-players').click();
+    await expectGameTabMatchesPanel(page, 'players');
+    await expectGamePanelCenteredInCarousel(page, 'players');
+
+    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left');
+    await expectGameTabMatchesPanel(page, 'chat');
+    await expect(page.getByTestId('chat-input')).toBeVisible();
+    await expectGamePanelCenteredInCarousel(page, 'chat');
+
+    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left');
+    await expectGameTabMatchesPanel(page, 'vote');
+    await expectGamePanelCenteredInCarousel(page, 'vote');
+
+    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'right');
+    await expectGameTabMatchesPanel(page, 'chat');
+    await expect(page.getByTestId('chat-input')).toBeVisible();
+    await expectGamePanelCenteredInCarousel(page, 'chat');
+  });
+
+  test('discussion question stays in viewport on players tab after swipe', async ({ page }) => {
+    await page.getByTestId('game-tab-players').click();
+    await expectGameTabMatchesPanel(page, 'players');
+
+    await expect(page.getByTestId('debate-question')).toBeVisible();
+
+    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left');
+    await expectGameTabMatchesPanel(page, 'chat');
+
+    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'right');
+    await expectGameTabMatchesPanel(page, 'players');
+    await expect(page.getByTestId('debate-question')).toBeVisible();
+    await expectGamePanelCenteredInCarousel(page, 'players');
   });
 });

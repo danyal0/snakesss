@@ -41,6 +41,31 @@ export async function expectGameTabMatchesPanel(
       'false'
     );
   }
+
+  await expectGamePanelCenteredInCarousel(page, expectedTab);
+}
+
+/** Active panel must occupy the carousel viewport (not clipped off-screen). */
+export async function expectGamePanelCenteredInCarousel(
+  page: Page,
+  panel: (typeof GAME_PANELS)[number]
+): Promise<void> {
+  const result = await page.evaluate((panelId) => {
+    const viewport = document.querySelector('[data-testid="game-carousel"]');
+    const el = document.querySelector(`[data-testid="game-panel-${panelId}"]`);
+    if (!viewport || !el) return { ok: false, reason: 'missing nodes' };
+    const v = viewport.getBoundingClientRect();
+    const p = el.getBoundingClientRect();
+    const overlap = Math.min(v.right, p.right) - Math.max(v.left, p.left);
+    return {
+      ok: overlap >= p.width * 0.8,
+      overlap,
+      panelWidth: p.width,
+      viewportWidth: v.width,
+    };
+  }, panel);
+
+  expect(result.ok, `panel not in carousel viewport: ${JSON.stringify(result)}`).toBe(true);
 }
 
 export async function expectLobbyTabMatchesPanel(

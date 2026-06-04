@@ -93,10 +93,6 @@ export function GameScreen({ gameState }: GameScreenProps) {
     resetGameSwipe();
   }, [phaseRoundKey, resetGameSwipe]);
 
-  useLayoutEffect(() => {
-    resetGameSwipe();
-  }, [activePanel, resetGameSwipe]);
-
   useEffect(() => {
     if (gameState.phase === 'question' || gameState.phase === 'voting') {
       useGameStore.getState().setShowRoleReveal(false);

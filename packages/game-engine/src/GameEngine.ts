@@ -630,8 +630,13 @@ export class GameEngine {
   }
 
   forcePhase(phase: GamePhase): void {
-    if (phase === 'discussion') this.transitionToDiscussion();
-    else if (phase === 'voting') this.transitionToVoting();
+    if (phase === 'discussion') {
+      if (!this.state.currentQuestion) {
+        const question = getRandomQuestion();
+        this.state = { ...this.state, currentQuestion: question };
+      }
+      this.transitionToDiscussion();
+    } else if (phase === 'voting') this.transitionToVoting();
     else if (phase === 'vote_reveal') this.transitionToVoteReveal();
   }
 

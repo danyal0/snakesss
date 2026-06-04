@@ -54,7 +54,10 @@ export function QuestionOptions({
         </motion.div>
       )}
 
-      <div className="glass-elevated rounded-2xl p-4 flex-shrink-0">
+      <div
+        data-testid={mode === 'discussion' ? 'debate-question' : 'peek-question'}
+        className="glass-elevated rounded-2xl p-4 flex-shrink-0"
+      >
         <p className="text-sm font-semibold text-white text-center leading-relaxed">
           {question.text}
         </p>
