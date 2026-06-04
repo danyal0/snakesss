@@ -4,11 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import type { RoomSummary } from '@snakesss/shared-types';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
+import { useNavigateHome } from '../hooks/useLeaveRoom';
 
 const SERVER_URL = import.meta.env['VITE_SERVER_URL'] ?? '';
 
 export function PublicRoomsScreen() {
   const navigate = useNavigate();
+  const goHome = useNavigateHome();
   const [rooms, setRooms] = useState<RoomSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -43,7 +45,7 @@ export function PublicRoomsScreen() {
   return (
     <div data-testid="public-rooms-screen" className="h-full app-bg flex flex-col p-4 gap-4 overflow-y-auto scrollbar-none">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/')}>← Back</Button>
+        <Button variant="ghost" size="sm" onClick={() => void goHome()}>← Back</Button>
         <h1 className="text-xl font-bold">Public Rooms</h1>
         <div className="flex-1" />
         <Button variant="ghost" size="sm" onClick={fetchRooms}>↻ Refresh</Button>

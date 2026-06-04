@@ -24,6 +24,7 @@ import {
   selectHasVoted,
 } from '../store/gameStore';
 import { useNavigate } from 'react-router-dom';
+import { useLeaveRoom } from '../hooks/useLeaveRoom';
 import { loadSession } from '../hooks/useSession';
 
 interface GameScreenProps {
@@ -32,6 +33,7 @@ interface GameScreenProps {
 
 export function GameScreen({ gameState }: GameScreenProps) {
   const navigate = useNavigate();
+  const confirmLeaveRoom = useLeaveRoom();
   const { sendMessage, castVote, sendTyping, submitAnswer, leaveRoom, playAgain } = useSocket();
   const store = useGameStore();
   /** User tab pick within current phase; cleared when phase/round changes. */
@@ -53,8 +55,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
   } = useSwipeTabs(GAME_PANELS, activePanel, setActivePanel, { scrollableBias: false });
 
   const handleLeaveRoom = () => {
-    leaveRoom();
-    navigate('/');
+    void confirmLeaveRoom(navigate);
   };
   const alivePlayers = selectAlivePlayers(store);
 
@@ -165,13 +166,11 @@ export function GameScreen({ gameState }: GameScreenProps) {
           try {
             await playAgain();
           } catch {
-            leaveRoom();
-            navigate('/', { replace: true });
+            void confirmLeaveRoom(navigate);
           }
         }}
         onLeave={() => {
-          leaveRoom();
-          navigate('/', { replace: true });
+          void confirmLeaveRoom(navigate);
         }}
       />
     );

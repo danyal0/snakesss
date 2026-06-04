@@ -19,6 +19,7 @@ import {
   clearActiveRoom,
 } from '../utils/userProfile';
 import { abandonRoom } from '../utils/abandonRoom';
+import { useConfirmLeaveHome } from '../hooks/useLeaveRoom';
 
 const ROOM_JOIN_TIMEOUT_MS = 6000;
 
@@ -29,6 +30,7 @@ export function RoomScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { joinRoom, createRoom } = useSocket();
+  const confirmLeaveHome = useConfirmLeaveHome();
   const gameState = useGameStore((s) => s.gameState);
   const isConnected = useGameStore((s) => s.isConnected);
   const playerId = useGameStore((s) => s.playerId);
@@ -223,8 +225,10 @@ export function RoomScreen() {
           performJoin(username, avatar, !!inProgress)
         }
         onCancel={() => {
-          clearActiveRoom();
-          navigate('/');
+          void confirmLeaveHome(navigate, () => {
+            clearActiveRoom();
+            if (code) abandonRoom(code);
+          });
         }}
       />
     );
@@ -240,9 +244,9 @@ export function RoomScreen() {
         </div>
         <button
           onClick={() => {
-            if (code) clearSession(code);
-            clearActiveRoom();
-            navigate('/');
+            void confirmLeaveHome(navigate, () => {
+              if (code) abandonRoom(code);
+            });
           }}
           className="glass-button rounded-xl px-6 py-3 text-white text-sm"
         >
