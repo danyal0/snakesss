@@ -7,7 +7,7 @@ export class GamePage {
     await this.page.getByTestId('game-screen').waitFor({ state: 'visible' });
   }
 
-  async switchTab(tab: 'question' | 'chat' | 'vote'): Promise<void> {
+  async switchTab(tab: 'question' | 'chat'): Promise<void> {
     await this.page.getByTestId(`game-tab-${tab}`).click();
   }
 

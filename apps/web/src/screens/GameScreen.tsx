@@ -10,6 +10,8 @@ import { GameEndScreen } from '../components/game/GameEndScreen';
 import { QuestionOptions } from '../components/game/QuestionOptions';
 import { AnswerVotePanel } from '../components/game/AnswerVotePanel';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
+import { SwipeCarousel } from '../components/ui/SwipeCarousel';
+import { Button } from '../components/ui/Button';
 import { GAME_PANELS, defaultPanelForPhase, gamePanelLabel, type GamePanel } from '../utils/gamePanels';
 import { AnswerReveal } from '../components/game/AnswerReveal';
 import { Timer } from '../components/ui/Timer';
@@ -30,7 +32,7 @@ interface GameScreenProps {
 
 export function GameScreen({ gameState }: GameScreenProps) {
   const navigate = useNavigate();
-  const { sendMessage, castVote, sendTyping, submitAnswer } = useSocket();
+  const { sendMessage, castVote, sendTyping, submitAnswer, leaveRoom } = useSocket();
   const store = useGameStore();
   /** User tab pick within current phase; cleared when phase/round changes. */
   const [manualPanel, setManualPanel] = useState<GamePanel | null>(null);
@@ -42,11 +44,18 @@ export function GameScreen({ gameState }: GameScreenProps) {
   const myRole = store.myRole;
   const typingIndicators = store.typingIndicators;
   const hasVoted = selectHasVoted(store);
-  const gamePanelIndex = GAME_PANELS.indexOf(activePanel);
   const {
     resetDrag: resetGameSwipe,
+    activeIndex: gameActiveIndex,
+    dragOffset: gameDragOffset,
+    isDragging: gameIsDragging,
     ...gameSwipeHandlers
   } = useSwipeTabs(GAME_PANELS, activePanel, setActivePanel, { scrollableBias: false });
+
+  const handleLeaveRoom = () => {
+    leaveRoom();
+    navigate('/');
+  };
   const alivePlayers = selectAlivePlayers(store);
 
   const me = playerId ? gameState.players.find((p) => p.id === playerId) : undefined;
@@ -170,7 +179,16 @@ export function GameScreen({ gameState }: GameScreenProps) {
       <div className="flex-shrink-0 z-10 px-4 pt-3 pb-2 overflow-visible">
         {/* Phase row */}
         <div className="flex items-center justify-between gap-2 mb-3">
-          <div data-testid="phase-badge" className={clsx('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold', phase.color)}>
+          <Button
+            data-testid="btn-leave-game"
+            variant="ghost"
+            size="sm"
+            className="flex-shrink-0 -ml-1"
+            onClick={handleLeaveRoom}
+          >
+            ← Leave
+          </Button>
+          <div data-testid="phase-badge" className={clsx('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold flex-1 min-w-0 justify-center', phase.color)}>
             <div className={clsx('w-1.5 h-1.5 rounded-full flex-shrink-0', phase.dot)} />
             <span className="truncate">{phase.label}</span>
             <span className="text-white/30 flex-shrink-0">·</span>
@@ -355,22 +373,26 @@ export function GameScreen({ gameState }: GameScreenProps) {
                 ))}
               </div>
 
-              {/* Single active panel — avoids carousel transform/tab desync on mobile */}
               <div
-                key={`${phaseRoundKey}-${activePanel}`}
-                data-testid="game-carousel"
-                className="flex-1 min-h-0 flex flex-col touch-pan-y"
+                key={phaseRoundKey}
+                className="flex-1 min-h-0 flex flex-col"
                 data-active-panel={activePanel}
-                data-carousel-index={gamePanelIndex < 0 ? 0 : gamePanelIndex}
-                onTouchStart={gameSwipeHandlers.onTouchStart}
-                onTouchMove={gameSwipeHandlers.onTouchMove}
-                onTouchEnd={gameSwipeHandlers.onTouchEnd}
-                onTouchCancel={gameSwipeHandlers.onTouchCancel}
+                data-carousel-index={gameActiveIndex}
               >
-                {activePanel === 'question' && (
+                <SwipeCarousel
+                  testId="game-carousel"
+                  activeIndex={gameActiveIndex}
+                  slideCount={GAME_PANELS.length}
+                  dragOffset={gameDragOffset}
+                  isDragging={gameIsDragging}
+                  onTouchStart={gameSwipeHandlers.onTouchStart}
+                  onTouchMove={gameSwipeHandlers.onTouchMove}
+                  onTouchEnd={gameSwipeHandlers.onTouchEnd}
+                  onTouchCancel={gameSwipeHandlers.onTouchCancel}
+                >
                   <div
                     data-testid="game-panel-question"
-                    data-panel-visible="true"
+                    data-panel-visible={activePanel === 'question'}
                     className="h-full min-h-0 flex flex-col"
                   >
                     {gameState.phase === 'discussion' && gameState.currentQuestion ? (
@@ -397,12 +419,10 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       </div>
                     )}
                   </div>
-                )}
 
-                {activePanel === 'chat' && (
                   <div
                     data-testid="game-panel-chat"
-                    data-panel-visible="true"
+                    data-panel-visible={activePanel === 'chat'}
                     className="h-full min-h-0"
                   >
                     <ChatPanel
@@ -414,24 +434,7 @@ export function GameScreen({ gameState }: GameScreenProps) {
                       onTyping={sendTyping}
                     />
                   </div>
-                )}
-
-                {activePanel === 'vote' && (
-                  <div
-                    data-testid="game-panel-vote"
-                    data-panel-visible="true"
-                    className="h-full min-h-0"
-                  >
-                    {!isAlive && !isSpectator ? (
-                      <EliminatedSpectatorView
-                        gameState={gameState}
-                        votes={voteCounts}
-                      />
-                    ) : (
-                      <EmptyVote roundHistory={gameState.roundHistory} />
-                    )}
-                  </div>
-                )}
+                </SwipeCarousel>
               </div>
             </div>
           )}
@@ -605,93 +608,3 @@ function ScoresPhase({ players, round, totalRounds }: {
   );
 }
 
-function EliminatedSpectatorView({
-  gameState,
-  votes,
-}: {
-  gameState: GameState;
-  votes: Record<string, number>;
-}) {
-  const alivePlayers = gameState.players.filter((p) => p.isAlive && !p.isSpectator);
-  const maxVotes = Math.max(...Object.values(votes), 0);
-
-  return (
-    <div className="h-full flex flex-col items-center justify-center p-6 gap-5 text-center">
-      <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="flex flex-col items-center gap-3"
-      >
-        <div className="text-6xl">💀</div>
-        <div>
-          <p className="text-white font-bold text-lg">You've been eliminated</p>
-          <p className="text-white/50 text-sm mt-1">Watch the remaining players vote</p>
-        </div>
-      </motion.div>
-
-      {gameState.phase === 'voting' && alivePlayers.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="w-full glass rounded-2xl p-4"
-        >
-          <p className="text-[10px] text-white/30 uppercase tracking-wider mb-3">
-            Live Vote Count
-          </p>
-          <div className="space-y-2.5">
-            {alivePlayers
-              .sort((a, b) => (votes[b.id] ?? 0) - (votes[a.id] ?? 0))
-              .map((player) => {
-                const count = votes[player.id] ?? 0;
-                return (
-                  <div key={player.id} className="flex items-center gap-2.5">
-                    <span className="text-base">{player.avatar}</span>
-                    <span className="text-xs text-white/70 flex-1">{player.username}</span>
-                    {count > 0 && (
-                      <>
-                        <div className="flex-1 h-1.5 bg-white/8 rounded-full overflow-hidden">
-                          <motion.div
-                            className="h-full bg-red-500 rounded-full"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${maxVotes > 0 ? (count / maxVotes) * 100 : 0}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-bold text-red-400 w-4 text-right">{count}</span>
-                      </>
-                    )}
-                    {count === 0 && (
-                      <span className="text-[10px] text-white/25">no votes</span>
-                    )}
-                  </div>
-                );
-              })}
-          </div>
-        </motion.div>
-      )}
-    </div>
-  );
-}
-
-function EmptyVote({ roundHistory }: { roundHistory: import('@snakesss/shared-types').RoundVotes[] }) {
-  return (
-    <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
-      <div className="text-5xl opacity-40">🗳️</div>
-      <p className="text-white/50 text-sm">Answer voting opens after the debate timer</p>
-      {roundHistory.length > 0 && (
-        <div className="w-full mt-2 space-y-1.5">
-          <p className="text-[10px] text-white/30 uppercase tracking-wider">History</p>
-          {roundHistory.map((r) => (
-            <div key={r.round} className="glass rounded-xl px-3 py-2 flex justify-between text-xs">
-              <span className="text-white/50">Round {r.round}</span>
-              {r.result
-                ? <span><span className="text-red-400 font-medium">{r.result.targetName}</span> <span className="text-white/40">({r.result.voteCount} votes)</span></span>
-                : <span className="text-white/30">No result</span>
-              }
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}

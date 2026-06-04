@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
-const GAME_PANELS = ['question', 'chat', 'vote'] as const;
+const GAME_PANELS = ['question', 'chat'] as const;
 const LOBBY_PANELS = ['players', 'bots', 'settings'] as const;
 
 /** Assert highlighted tab index matches visible carousel panel (no desync). */
@@ -28,16 +28,17 @@ export async function expectGameTabMatchesPanel(
 
   expect(sync.ok, `tab/panel desync: ${JSON.stringify(sync)}`).toBe(true);
 
-  await expect(page.getByTestId(`game-panel-${expectedTab}`)).toBeVisible();
   await expect(page.getByTestId(`game-panel-${expectedTab}`)).toHaveAttribute(
     'data-panel-visible',
     'true'
   );
 
-  // Single-panel mount: inactive panels are not in the DOM
   for (const panel of GAME_PANELS) {
     if (panel === expectedTab) continue;
-    await expect(page.getByTestId(`game-panel-${panel}`)).toHaveCount(0);
+    await expect(page.getByTestId(`game-panel-${panel}`)).toHaveAttribute(
+      'data-panel-visible',
+      'false'
+    );
   }
 
   await expectGamePanelCenteredInCarousel(page, expectedTab);
@@ -64,6 +65,32 @@ export async function expectGamePanelCenteredInCarousel(
   }, panel);
 
   expect(result.ok, `panel not in carousel viewport: ${JSON.stringify(result)}`).toBe(true);
+}
+
+/** Whether a test id inside the game carousel overlaps the carousel viewport (both slides stay mounted). */
+export async function expectGameElementInCarouselViewport(
+  page: Page,
+  testId: string,
+  inViewport: boolean
+): Promise<void> {
+  const result = await page.evaluate(
+    ({ testId, inViewport }) => {
+      const viewport = document.querySelector('[data-testid="game-carousel"]');
+      const el = document.querySelector(`[data-testid="${testId}"]`);
+      if (!viewport || !el) return { ok: false, reason: 'missing nodes' };
+      const v = viewport.getBoundingClientRect();
+      const p = el.getBoundingClientRect();
+      const overlap = Math.min(v.right, p.right) - Math.max(v.left, p.left);
+      const visible = overlap >= Math.min(p.width, v.width) * 0.5;
+      return { ok: visible === inViewport, visible, overlap, testId };
+    },
+    { testId, inViewport }
+  );
+
+  expect(
+    result.ok,
+    `element ${testId} viewport=${inViewport}: ${JSON.stringify(result)}`
+  ).toBe(true);
 }
 
 export async function expectLobbyTabMatchesPanel(

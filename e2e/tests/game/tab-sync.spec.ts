@@ -17,7 +17,7 @@ test.describe('Game tab ↔ panel sync', () => {
     await readyGameScreen(page);
   });
 
-  test('discussion phase: chat tab shows chat panel (not vote)', async ({ page }) => {
+  test('discussion phase: chat tab shows chat panel', async ({ page }) => {
     await expectGameTabMatchesPanel(page, 'chat');
     await expect(page.getByTestId('chat-panel')).toBeVisible();
     await expect(page.locator('[data-active-panel="chat"]')).toBeVisible();
@@ -72,7 +72,7 @@ test.describe('Game tab ↔ panel sync', () => {
     await expect(page.getByTestId('chat-panel')).toBeVisible();
   });
 
-  test('live socket transition voting → discussion: chat tab, not vote UI', async ({
+  test('live socket transition voting → discussion: chat tab', async ({
     page,
     request,
     e2eRoomId,
@@ -92,7 +92,6 @@ test.describe('Game tab ↔ panel sync', () => {
 
     await expectGameTabMatchesPanel(page, 'chat');
     await expect(page.getByTestId('chat-panel')).toBeVisible();
-    await expect(page.getByText('Secret vote')).not.toBeVisible();
   });
 
   test('question → voting → discussion (reload per phase) shows chat panel', async ({
@@ -114,7 +113,6 @@ test.describe('Game tab ↔ panel sync', () => {
 
     await expectGameTabMatchesPanel(page, 'chat');
     await expect(page.getByTestId('chat-panel')).toBeVisible();
-    await expect(page.getByText('Secret vote')).not.toBeVisible();
   });
 
   test('manual tab clicks match visible panels', async ({ page }) => {
@@ -123,9 +121,10 @@ test.describe('Game tab ↔ panel sync', () => {
 
     await page.getByTestId('game-tab-chat').click();
     await expectGameTabMatchesPanel(page, 'chat');
+  });
 
-    await page.getByTestId('game-tab-vote').click();
-    await expectGameTabMatchesPanel(page, 'vote');
+  test('leave button visible during game', async ({ page }) => {
+    await expect(page.getByTestId('btn-leave-game')).toBeVisible();
   });
 });
 
@@ -139,22 +138,22 @@ test.describe('Game swipe on touch devices', () => {
     await readyGameScreen(page);
   });
 
-  test('swipe from chat to vote shows vote panel', async ({ page }) => {
+  test('swipe from chat to question shows question panel', async ({ page }) => {
     await expectGameTabMatchesPanel(page, 'chat');
-    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left');
-    await expectGameTabMatchesPanel(page, 'vote');
-    await expectGamePanelCenteredInCarousel(page, 'vote');
+    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'right');
+    await expectGameTabMatchesPanel(page, 'question');
+    await expectGamePanelCenteredInCarousel(page, 'question');
   });
 
   test('short swipe release keeps chat panel visible (no blank carousel)', async ({ page }) => {
     await expectGameTabMatchesPanel(page, 'chat');
-    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'right', 30);
+    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left', 30);
     await expectGameTabMatchesPanel(page, 'chat');
     await expect(page.getByTestId('chat-input')).toBeVisible();
     await expectGamePanelCenteredInCarousel(page, 'chat');
   });
 
-  test('swipe question → chat → vote panels stay visible after each release', async ({ page }) => {
+  test('swipe question → chat panels stay visible after each release', async ({ page }) => {
     await page.getByTestId('game-tab-question').click();
     await expectGameTabMatchesPanel(page, 'question');
     await expectGamePanelCenteredInCarousel(page, 'question');
@@ -164,14 +163,10 @@ test.describe('Game swipe on touch devices', () => {
     await expect(page.getByTestId('chat-input')).toBeVisible();
     await expectGamePanelCenteredInCarousel(page, 'chat');
 
-    await swipeHorizontal(page, page.getByTestId('game-carousel'), 'left');
-    await expectGameTabMatchesPanel(page, 'vote');
-    await expectGamePanelCenteredInCarousel(page, 'vote');
-
     await swipeHorizontal(page, page.getByTestId('game-carousel'), 'right');
-    await expectGameTabMatchesPanel(page, 'chat');
-    await expect(page.getByTestId('chat-input')).toBeVisible();
-    await expectGamePanelCenteredInCarousel(page, 'chat');
+    await expectGameTabMatchesPanel(page, 'question');
+    await expect(page.getByTestId('debate-question')).toBeVisible();
+    await expectGamePanelCenteredInCarousel(page, 'question');
   });
 
   test('discussion question stays visible on question tab after swipe', async ({ page }) => {
@@ -191,6 +186,6 @@ test.describe('Game swipe on touch devices', () => {
 
   test('tab label shows Question not Players', async ({ page }) => {
     await expect(page.getByTestId('game-tab-question')).toHaveText(/Question/i);
-    await expect(page.getByRole('button', { name: /Players/i })).toHaveCount(0);
+    await expect(page.getByTestId('game-tab-vote')).toHaveCount(0);
   });
 });

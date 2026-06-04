@@ -1,6 +1,9 @@
 import { test, expect } from '../../fixtures/test-fixture';
 import { startE2EGame, forceE2EPhase } from '../../utils/seed';
-import { expectGameTabMatchesPanel } from '../../utils/panel-sync';
+import {
+  expectGameTabMatchesPanel,
+  expectGameElementInCarouselViewport,
+} from '../../utils/panel-sync';
 import { dismissBlockingGameOverlays } from '../../utils/game-ui';
 
 test.describe('Game tab content must match active tab', () => {
@@ -15,21 +18,19 @@ test.describe('Game tab content must match active tab', () => {
   test('question tab shows debate question, not chat', async ({ page }) => {
     await page.getByTestId('game-tab-question').click();
     await expectGameTabMatchesPanel(page, 'question');
-    await expect(page.getByTestId('debate-question')).toBeVisible();
-    await expect(page.getByTestId('chat-input')).toHaveCount(0);
+    await expectGameElementInCarouselViewport(page, 'debate-question', true);
+    await expectGameElementInCarouselViewport(page, 'chat-input', false);
   });
 
   test('chat tab shows chat input, not debate question', async ({ page }) => {
     await page.getByTestId('game-tab-chat').click();
     await expectGameTabMatchesPanel(page, 'chat');
-    await expect(page.getByTestId('chat-input')).toBeVisible();
-    await expect(page.getByTestId('debate-question')).toHaveCount(0);
+    await expectGameElementInCarouselViewport(page, 'chat-input', true);
+    await expectGameElementInCarouselViewport(page, 'debate-question', false);
   });
 
-  test('vote tab shows vote placeholder, not chat', async ({ page }) => {
-    await page.getByTestId('game-tab-vote').click();
-    await expectGameTabMatchesPanel(page, 'vote');
-    await expect(page.getByText(/Answer voting opens|Secret vote/i)).toBeVisible();
-    await expect(page.getByTestId('chat-input')).toHaveCount(0);
+  test('no vote tab in game', async ({ page }) => {
+    await expect(page.getByTestId('game-tab-vote')).toHaveCount(0);
+    await expect(page.getByTestId('game-panel-vote')).toHaveCount(0);
   });
 });
