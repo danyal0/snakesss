@@ -6,6 +6,7 @@ import { useLeaveRoom } from '../hooks/useLeaveRoom';
 import type { GameState, RoomSettings, BotPersona } from '@snakesss/shared-types';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { AvatarDisplay } from '../components/ui/Avatar';
 import { useSocket } from '../hooks/useSocket';
 import { useSwipeTabs } from '../hooks/useSwipeTabs';
@@ -444,6 +445,60 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 </div>
               )}
 
+
+              <GlassCard className="p-4 space-y-3 border border-emerald-500/20" data-testid="lobby-question-category-card">
+                <div>
+                  <p className="text-sm font-semibold text-emerald-200/90">Question category</p>
+                  <p className="text-xs text-white/45 mt-0.5">
+                    AI trivia for this topic — quality-checked before each round
+                  </p>
+                </div>
+                <Input
+                  data-testid="lobby-question-topic-input"
+                  label="Topic"
+                  placeholder="e.g. World capitals, 90s movies, Biology"
+                  value={settings.questionTopic ?? ''}
+                  onChange={(e) =>
+                    setSettings({ ...settings, questionTopic: e.target.value })
+                  }
+                  disabled={!isManager}
+                  maxLength={80}
+                />
+                <div className="flex flex-wrap gap-1.5" data-testid="lobby-question-topic-presets">
+                  {QUESTION_TOPIC_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      data-testid={`lobby-question-topic-preset-${preset.replace(/\s+/g, '-').replace(/&/g, 'and')}`}
+                      onClick={() => setSettings({ ...settings, questionTopic: preset })}
+                      disabled={!isManager}
+                      className={clsx(
+                        'text-xs px-2.5 py-1 rounded-full border transition-colors disabled:opacity-40',
+                        settings.questionTopic === preset
+                          ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-200'
+                          : 'border-white/10 bg-white/5 text-white/60 hover:bg-white/10'
+                      )}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <p className="text-sm text-white/80">AI questions</p>
+                    <p className="text-xs text-white/40">
+                      Discard weak questions until answers are hard to pick
+                    </p>
+                  </div>
+                  <Toggle
+                    data-testid="lobby-ai-questions-toggle"
+                    value={settings.aiQuestionsEnabled ?? true}
+                    onChange={(v) => setSettings({ ...settings, aiQuestionsEnabled: v })}
+                    disabled={!isManager}
+                  />
+                </div>
+              </GlassCard>
+
               <GlassCard className="p-4 space-y-4">
                 <SettingRow
                   label="Max Players"
@@ -632,13 +687,16 @@ function Toggle({
   value,
   onChange,
   disabled,
+  'data-testid': testId,
 }: {
   value: boolean;
   onChange: (v: boolean) => void;
   disabled: boolean;
+  'data-testid'?: string;
 }) {
   return (
     <button
+      data-testid={testId}
       role="switch"
       aria-checked={value}
       className={clsx(
