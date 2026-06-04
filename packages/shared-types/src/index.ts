@@ -306,6 +306,7 @@ export interface ClientToServerEvents {
   'room:settings:update': (payload: UpdateSettingsPayload) => void;
   'room:add_bot': (persona: BotPersona, cb: (result: { botId: string } | { error: string }) => void) => void;
   'room:kick': (targetId: string) => void;
+  'room:play_again': (cb?: (result: { success: true } | { error: string }) => void) => void;
   'quiz:submit_answer': (payload: SubmitAnswerPayload) => void;
   'chat:send': (payload: SendMessagePayload) => void;
   'chat:typing': (isTyping: boolean) => void;

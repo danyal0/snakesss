@@ -168,6 +168,7 @@ export function registerSocketHandlers(
       meta.roomId = roomId;
 
       roomManager.registerSocket(roomId, effectivePlayerId, socket.id);
+      roomManager.cancelScheduledClose(roomId);
       socket.join(`room:${roomId}`);
 
       const state = engine.getPublicState();
@@ -189,6 +190,29 @@ export function registerSocketHandlers(
       if (meta?.roomId && meta?.playerId) {
         handleDisconnect(meta.roomId, meta.playerId, socket, io, roomManager);
       }
+    });
+
+    // ── Room: Play again (return to lobby after game over) ───────────────────
+    socket.on('room:play_again', (cb) => {
+      const meta = socketMeta.get(socket);
+      if (!meta?.roomId) {
+        cb?.({ error: 'Not in a room' });
+        return;
+      }
+      const engine = roomManager.getEngine(meta.roomId);
+      if (!engine) {
+        cb?.({ error: 'Room not found' });
+        return;
+      }
+      const result = engine.returnToLobby();
+      if (!result.success) {
+        cb?.({ error: result.error ?? 'Cannot return to lobby' });
+        return;
+      }
+      roomManager.cancelScheduledClose(meta.roomId);
+      emitPublicState(meta.roomId, io, roomManager);
+      broadcastAdminState(io, roomManager);
+      cb?.({ success: true });
     });
 
     // ── Room: Start ─────────────────────────────────────────────────────────
@@ -506,6 +530,7 @@ async function handlePhaseTransition(
           winner,
           winnerPlayerIds: finalState.winnerPlayerIds,
         });
+        roomManager.scheduleRoomClose(roomId);
       } else {
         engine.transitionToScores();
       }
@@ -521,6 +546,7 @@ async function handlePhaseTransition(
         const finalState = engine.getState();
         io.to(`room:${roomId}`).emit('game:ended', null, finalState.players, winnerPlayerIds);
         leaderboard.recordGame({ players: finalState.players, winner: null, winnerPlayerIds });
+        roomManager.scheduleRoomClose(roomId);
       } else {
         engine.nextRound();
         emitPrivateRoles(roomId, io, roomManager);
@@ -726,9 +752,10 @@ function handleDisconnect(
   const state = engine.getState();
   const connectedPlayers = state.players.filter((p) => p.isConnected && !p.isSpectator);
 
-  if (connectedPlayers.length === 0 && state.phase === 'lobby') {
-    roomManager.closeRoom(roomId);
+  if (connectedPlayers.length === 0) {
+    roomManager.scheduleRoomClose(roomId);
   } else {
+    roomManager.cancelScheduledClose(roomId);
     io.to(`room:${roomId}`).emit('player:left', playerId);
     emitPublicState(roomId, io, roomManager);
   }

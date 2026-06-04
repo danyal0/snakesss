@@ -32,7 +32,7 @@ interface GameScreenProps {
 
 export function GameScreen({ gameState }: GameScreenProps) {
   const navigate = useNavigate();
-  const { sendMessage, castVote, sendTyping, submitAnswer, leaveRoom } = useSocket();
+  const { sendMessage, castVote, sendTyping, submitAnswer, leaveRoom, playAgain } = useSocket();
   const store = useGameStore();
   /** User tab pick within current phase; cleared when phase/round changes. */
   const [manualPanel, setManualPanel] = useState<GamePanel | null>(null);
@@ -129,8 +129,18 @@ export function GameScreen({ gameState }: GameScreenProps) {
         winner={store.winner ?? gameState.winner}
         winnerPlayerIds={store.winnerPlayerIds.length > 0 ? store.winnerPlayerIds : (gameState.winnerPlayerIds ?? [])}
         myPlayerId={playerId}
-        onPlayAgain={() => { store.reset(); navigate('/'); }}
-        onLeave={() => { store.reset(); navigate('/'); }}
+        onPlayAgain={async () => {
+          try {
+            await playAgain();
+          } catch {
+            leaveRoom();
+            navigate('/', { replace: true });
+          }
+        }}
+        onLeave={() => {
+          leaveRoom();
+          navigate('/', { replace: true });
+        }}
       />
     );
   }

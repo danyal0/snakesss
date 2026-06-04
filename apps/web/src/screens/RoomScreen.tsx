@@ -18,6 +18,10 @@ import {
   setActiveRoom,
   clearActiveRoom,
 } from '../utils/userProfile';
+import { abandonRoom } from '../utils/abandonRoom';
+
+const ROOM_JOIN_TIMEOUT_MS = 6000;
+
 type RoomIntent = 'join' | 'spectate' | 'invite';
 
 export function RoomScreen() {
@@ -110,7 +114,16 @@ export function RoomScreen() {
       return;
     }
 
-    if (session) return;
+    if (session && !registered) {
+      if (!autoJoinAttempted.current) {
+        autoJoinAttempted.current = true;
+        performJoin(session.username, session.avatar as AvatarEmoji, false).catch(() => {
+          abandonRoom(code);
+          navigate('/', { replace: true });
+        });
+      }
+      return;
+    }
 
     if (intent === 'spectate') {
       if (!spectateAttempted.current) {
@@ -163,10 +176,33 @@ export function RoomScreen() {
   }, [code, gameState?.phase, isConnected, registered, isSpectator, performJoin]);
 
   useEffect(() => {
-    if (lastSocketError?.includes('Room not found')) {
-      tryRecreateRoom();
+    if (!code) return;
+    if (!lastSocketError?.toLowerCase().includes('room not found')) return;
+    void tryRecreateRoom().then((recreated) => {
+      if (!recreated) {
+        abandonRoom(code);
+        navigate('/', { replace: true });
+      }
+    });
+  }, [lastSocketError, tryRecreateRoom, code, navigate]);
+
+  // Stale session or dead room: never leave user on the connecting spinner
+  useEffect(() => {
+    if (!code || gameState?.roomId === code) return;
+
+    const bail = () => {
+      abandonRoom(code);
+      navigate('/', { replace: true });
+    };
+
+    if (lastSocketError?.toLowerCase().includes('room not found')) {
+      bail();
+      return;
     }
-  }, [lastSocketError, tryRecreateRoom]);
+
+    const t = setTimeout(bail, ROOM_JOIN_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [code, gameState?.roomId, lastSocketError, navigate]);
 
   const displayError =
     joinError || (session && !needsJoinForm ? lastSocketError : '');
@@ -217,24 +253,7 @@ export function RoomScreen() {
   }
 
   if (!gameState || gameState.roomId !== code) {
-    return (
-      <div data-testid="room-loading" className="h-full app-bg flex flex-col items-center justify-center gap-4 p-6">
-        <div className="text-5xl" style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>🐍</div>
-        <p className="text-white/60 text-sm text-center">
-          Connecting to room{' '}
-          <span className="font-mono font-bold text-white/80">{code}</span>…
-        </p>
-        <p className="text-xs text-white/25">
-          {session ? 'Restoring your session…' : 'Getting room state…'}
-        </p>
-        <button
-          onClick={() => navigate('/')}
-          className="text-xs text-white/30 hover:text-white/60 mt-4 transition-colors"
-        >
-          ← Back to Home
-        </button>
-      </div>
-    );
+    return <div data-testid="room-loading" className="h-full app-bg min-h-0" aria-busy="true" />;
   }
 
   if (queueNotice && isSpectator) {

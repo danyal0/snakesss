@@ -506,6 +506,47 @@ export class GameEngine {
     return getHighestScorers(this.state.players);
   }
 
+  /** After a finished match, reset to lobby so the host can start another game. */
+  returnToLobby(): { success: boolean; error?: string } {
+    if (this.state.phase !== 'ended') {
+      return { success: false, error: 'Game has not ended yet' };
+    }
+
+    this.clearPhaseTimer();
+    this.roleMap.clear();
+    this.answerMap.clear();
+    this.usedQuestionTopics = [];
+    this.chatTimestamps.clear();
+
+    this.state = {
+      ...this.state,
+      phase: 'lobby',
+      round: 0,
+      currentQuestion: null,
+      answers: {},
+      answersRevealed: [],
+      roundScores: {},
+      votes: {},
+      roundHistory: [],
+      chat: [],
+      winner: null,
+      winnerPlayerIds: null,
+      phaseEndsAt: null,
+      startedAt: null,
+      endedAt: null,
+      isPaused: false,
+      players: this.state.players.map((p) => ({
+        ...p,
+        isAlive: true,
+        score: 0,
+        role: undefined,
+      })),
+    };
+
+    this.notifyStateChange();
+    return { success: true };
+  }
+
   endGame(winner: WinCondition, winnerPlayerIds: string[] | null = null): void {
     const allRoles: Player[] = this.state.players.map((p) => ({
       ...p,
