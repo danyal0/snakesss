@@ -437,7 +437,9 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 <SettingRow
                   label="Max Players"
                   value={settings.maxPlayers}
-                  onChange={(v) => setSettings({ ...settings, maxPlayers: v })}
+                  onChange={(updater) =>
+                    setSettings((prev) => ({ ...prev, maxPlayers: updater(prev.maxPlayers) }))
+                  }
                   min={3} max={12} step={1}
                   disabled={!isManager}
                 />
@@ -447,7 +449,12 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   testId="discussion-timer"
                   value={settings.discussionTimer}
                   suffix="s"
-                  onChange={(v) => setSettings({ ...settings, discussionTimer: v })}
+                  onChange={(updater) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      discussionTimer: updater(prev.discussionTimer),
+                    }))
+                  }
                   min={30} max={300} step={15}
                   disabled={!isManager}
                 />
@@ -456,7 +463,9 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   label="Vote Timer"
                   value={settings.voteTimer}
                   suffix="s"
-                  onChange={(v) => setSettings({ ...settings, voteTimer: v })}
+                  onChange={(updater) =>
+                    setSettings((prev) => ({ ...prev, voteTimer: updater(prev.voteTimer) }))
+                  }
                   min={15} max={60} step={5}
                   disabled={!isManager}
                 />
@@ -465,7 +474,12 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   label="Snake Peek"
                   value={settings.snakePeekTimer ?? settings.questionTimer}
                   suffix="s"
-                  onChange={(v) => setSettings({ ...settings, snakePeekTimer: v })}
+                  onChange={(updater) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      snakePeekTimer: updater(prev.snakePeekTimer ?? prev.questionTimer),
+                    }))
+                  }
                   min={5} max={90} step={5}
                   disabled={!isManager}
                 />
@@ -473,11 +487,14 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 <SettingRow
                   label="Snakes"
                   value={settings.roleDistribution.snakes}
-                  onChange={(v) =>
-                    setSettings({
-                      ...settings,
-                      roleDistribution: { ...settings.roleDistribution, snakes: v },
-                    })
+                  onChange={(updater) =>
+                    setSettings((prev) => ({
+                      ...prev,
+                      roleDistribution: {
+                        ...prev.roleDistribution,
+                        snakes: updater(prev.roleDistribution.snakes),
+                      },
+                    }))
                   }
                   min={1} max={4} step={1}
                   disabled={!isManager}
@@ -587,7 +604,7 @@ function SettingRow({
   label: string;
   value: number;
   suffix?: string;
-  onChange: (v: number) => void;
+  onChange: (updater: (current: number) => number) => void;
   min: number;
   max: number;
   step: number;
@@ -607,7 +624,7 @@ function SettingRow({
           data-testid={testId ? `setting-${testId}-minus` : undefined}
           data-no-swipe
           className="w-8 h-8 rounded-xl glass-button flex items-center justify-center text-white/70 text-lg disabled:opacity-30 touch-manipulation"
-          onClick={() => onChange(Math.max(min, value - step))}
+          onClick={() => onChange((current) => Math.max(min, current - step))}
           disabled={disabled || value <= min}
         >
           −
@@ -623,7 +640,7 @@ function SettingRow({
           data-testid={testId ? `setting-${testId}-plus` : undefined}
           data-no-swipe
           className="w-8 h-8 rounded-xl glass-button flex items-center justify-center text-white/70 text-lg disabled:opacity-30 touch-manipulation"
-          onClick={() => onChange(Math.min(max, value + step))}
+          onClick={() => onChange((current) => Math.min(max, current + step))}
           disabled={disabled || value >= max}
         >
           +

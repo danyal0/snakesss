@@ -73,3 +73,35 @@ export async function swipeVertical(
     changedTouches: [{ clientX: x, clientY: endY, identifier: 0 }],
   });
 }
+
+/** Tap a control with slight horizontal drift (simulates imprecise finger on steppers). */
+export async function tapWithHorizontalDrift(
+  target: Locator,
+  driftXPx = 18
+): Promise<void> {
+  const box = await target.boundingBox();
+  if (!box) throw new Error('Tap target has no bounding box');
+
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  const endX = x + driftXPx;
+
+  await target.dispatchEvent('touchstart', {
+    touches: [{ clientX: x, clientY: y, identifier: 0 }],
+    targetTouches: [{ clientX: x, clientY: y, identifier: 0 }],
+    changedTouches: [{ clientX: x, clientY: y, identifier: 0 }],
+  });
+
+  await target.dispatchEvent('touchmove', {
+    touches: [{ clientX: endX, clientY: y + 2, identifier: 0 }],
+    targetTouches: [{ clientX: endX, clientY: y + 2, identifier: 0 }],
+    changedTouches: [{ clientX: endX, clientY: y + 2, identifier: 0 }],
+  });
+
+  await target.dispatchEvent('touchend', {
+    touches: [],
+    changedTouches: [{ clientX: endX, clientY: y + 2, identifier: 0 }],
+  });
+
+  await target.click();
+}

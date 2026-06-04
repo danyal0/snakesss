@@ -1,4 +1,5 @@
 import { test, expect } from '../../fixtures/test-fixture';
+import { tapWithHorizontalDrift } from '../../utils/swipe';
 import { expectLobbyTabMatchesPanel } from '../../utils/panel-sync';
 
 test.describe('Lobby settings steppers vs swipe', () => {
@@ -17,7 +18,7 @@ test.describe('Lobby settings steppers vs swipe', () => {
     await expect(value).toHaveText('120s');
 
     for (let i = 0; i < 5; i++) {
-      await minus.tap();
+      await minus.click({ delay: 0 });
     }
 
     await expect(value).toHaveText('45s');
@@ -29,15 +30,7 @@ test.describe('Lobby settings steppers vs swipe', () => {
     await expectLobbyTabMatchesPanel(page, 'settings');
 
     const minus = page.getByTestId('setting-discussion-timer-minus');
-    const box = await minus.boundingBox();
-    expect(box).toBeTruthy();
-
-    const x = box!.x + box!.width / 2;
-    const y = box!.y + box!.height / 2;
-
-    await page.touchscreen.touchStart(x, y);
-    await page.touchscreen.touchMove(x + 18, y + 2);
-    await page.touchscreen.touchEnd();
+    await tapWithHorizontalDrift(minus, 18);
 
     await expect(page.getByTestId('setting-discussion-timer-value')).toHaveText('105s');
     await expectLobbyTabMatchesPanel(page, 'settings');
