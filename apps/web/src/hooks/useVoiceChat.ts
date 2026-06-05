@@ -17,6 +17,29 @@ function loadVoiceMode(): VoiceMode {
   }
 }
 
+function attachStreamToAudio(remoteId: string, stream: MediaStream): void {
+  const domAudio = document.getElementById(`voice-audio-${remoteId}`) as HTMLAudioElement | null;
+  const audio = domAudio ?? (() => {
+    const el = document.createElement('audio');
+    el.id = `voice-audio-${remoteId}`;
+    el.autoplay = true;
+    el.setAttribute('playsinline', 'true');
+    el.className = 'hidden';
+    document.body.appendChild(el);
+    return el;
+  })();
+
+  audio.srcObject = stream;
+  void audio.play().catch(() => {
+    // Autoplay may be blocked until the next user gesture; retry once on click.
+    const retry = () => {
+      void audio.play().catch(() => {});
+      document.removeEventListener('pointerdown', retry);
+    };
+    document.addEventListener('pointerdown', retry, { once: true });
+  });
+}
+
 export function useVoiceChat(enabled: boolean) {
   const playerId = useGameStore((s) => s.playerId);
   const roomId = useGameStore((s) => s.gameState?.roomId);
@@ -29,6 +52,7 @@ export function useVoiceChat(enabled: boolean) {
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastSpeakingEmitRef = useRef(0);
   const pushHeldRef = useRef(false);
@@ -52,6 +76,8 @@ export function useVoiceChat(enabled: boolean) {
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     analyserRef.current = null;
+    void audioContextRef.current?.close().catch(() => {});
+    audioContextRef.current = null;
     getSocket().emit('voice:leave');
     setSpeakingLevels({});
   }, []);
@@ -74,11 +100,8 @@ export function useVoiceChat(enabled: boolean) {
       };
 
       pc.ontrack = (ev) => {
-        const audio = document.getElementById(`voice-audio-${remoteId}`) as HTMLAudioElement | null;
-        if (audio) {
-          audio.srcObject = ev.streams[0] ?? null;
-          void audio.play().catch(() => {});
-        }
+        const remoteStream = ev.streams[0];
+        if (remoteStream) attachStreamToAudio(remoteId, remoteStream);
       };
 
       if (initiator) {
@@ -157,7 +180,12 @@ export function useVoiceChat(enabled: boolean) {
         video: false,
       });
       localStreamRef.current = stream;
+
       const ctx = new AudioContext();
+      audioContextRef.current = ctx;
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
