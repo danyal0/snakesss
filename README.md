@@ -46,8 +46,8 @@ CLIENT_ORIGIN=https://your-app.railway.app
 ADMIN_ORIGIN=https://your-app.railway.app
 ```
 
-5. **Attach a volume** mounted at `/app/data` (persists leaderboard + admin analytics across deploys)
-6. Set `DATA_DIR=/app/data` (default in Dockerfile)
+5. In the Railway service → **Volumes** → add a volume with mount path **`/app/data`** (do not use `VOLUME` in the Dockerfile — Railway rejects it)
+6. Set `DATA_DIR=/app/data` (default in Dockerfile; optional if unchanged)
 7. Deploy → server starts on `:3001`, web on `/`, admin on `/admin`
 
 ## Environment Variables

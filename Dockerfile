@@ -56,12 +56,10 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/apps/web/dist ./apps/web/dist
 COPY --from=builder /app/apps/admin/dist ./apps/admin/dist
 
-# Persistent data directory (mount Railway volume at /app/data)
+# Default data dir — attach a Railway Volume to /app/data in the service settings (not VOLUME in Dockerfile).
 RUN mkdir -p /app/data \
   && echo '{}' > /app/data/leaderboard.json \
   && echo '{"completedGames":[]}' > /app/data/analytics.json
-
-VOLUME ["/app/data"]
 
 EXPOSE 3001
 
