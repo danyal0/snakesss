@@ -6,6 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/game-engine/package.json ./packages/game-engine/
+COPY packages/identity/package.json ./packages/identity/
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
 COPY apps/admin/package.json ./apps/admin/
@@ -19,6 +20,7 @@ COPY . .
 
 # Build shared packages first
 RUN npm run build --workspace=packages/shared-types
+RUN npm run build --workspace=packages/identity
 RUN npm run build --workspace=packages/game-engine
 
 # Build server
@@ -36,6 +38,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3001
+ENV DATA_DIR=/app/data
 
 # Copy server build + node_modules
 COPY --from=builder /app/apps/server/dist ./apps/server/dist
@@ -44,12 +47,21 @@ COPY --from=builder /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=builder /app/packages/shared-types/package.json ./packages/shared-types/
 COPY --from=builder /app/packages/game-engine/dist ./packages/game-engine/dist
 COPY --from=builder /app/packages/game-engine/package.json ./packages/game-engine/
+COPY --from=builder /app/packages/identity/dist ./packages/identity/dist
+COPY --from=builder /app/packages/identity/package.json ./packages/identity/
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 
 # Copy web + admin static builds for serving
 COPY --from=builder /app/apps/web/dist ./apps/web/dist
 COPY --from=builder /app/apps/admin/dist ./apps/admin/dist
+
+# Persistent data directory (mount Railway volume at /app/data)
+RUN mkdir -p /app/data \
+  && echo '{}' > /app/data/leaderboard.json \
+  && echo '{"completedGames":[]}' > /app/data/analytics.json
+
+VOLUME ["/app/data"]
 
 EXPOSE 3001
 

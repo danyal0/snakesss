@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { leaderboard } from './LeaderboardStore';
+import { analyticsStore } from './AnalyticsStore';
 import { RoomManager } from './RoomManager';
 import { requireAdmin, handleAdminLogin } from './auth';
 
@@ -101,6 +102,11 @@ export function createAdminRouter(
 
   router.delete('/leaderboard', requireAdmin, (_req, res) => {
     leaderboard.clear();
+    res.json({ success: true });
+  });
+
+  router.delete('/analytics', requireAdmin, (_req, res) => {
+    analyticsStore.clear();
     res.json({ success: true });
   });
 

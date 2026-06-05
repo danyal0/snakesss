@@ -700,6 +700,15 @@ async function handlePhaseTransition(
           winner,
           winnerPlayerIds: finalState.winnerPlayerIds,
         });
+        if (finalState.startedAt) {
+          roomManager.recordCompletedGame(
+            roomId,
+            winner,
+            (finalState.endedAt ?? Date.now()) - finalState.startedAt,
+            finalState.players.some((p) => p.isBot),
+            finalState.startedAt
+          );
+        }
         roomManager.scheduleRoomClose(roomId);
       } else {
         engine.transitionToScores();
@@ -721,6 +730,15 @@ async function handlePhaseTransition(
           winner: null,
           winnerPlayerIds,
         });
+        if (finalState.startedAt) {
+          roomManager.recordCompletedGame(
+            roomId,
+            null,
+            (finalState.endedAt ?? Date.now()) - finalState.startedAt,
+            finalState.players.some((p) => p.isBot),
+            finalState.startedAt
+          );
+        }
         roomManager.scheduleRoomClose(roomId);
       } else {
         engine.nextRound();

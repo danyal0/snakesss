@@ -8,7 +8,7 @@ import {
   AdminState,
   BotPersona,
 } from '@snakesss/shared-types';
-import { leaderboard } from './LeaderboardStore';
+import { analyticsStore } from './AnalyticsStore';
 import {
   GameEngine,
   BotDecisionEngine,
@@ -29,21 +29,12 @@ function normalizeUsername(username: string): string {
   return username.toLowerCase().trim();
 }
 
-interface CompletedGame {
-  roomId: string;
-  winner: 'humans' | 'snakes' | null;
-  durationMs: number;
-  hadBots: boolean;
-  startedAt: number;
-}
-
 /** Keep empty or finished rooms in memory so players can rejoin / play again. */
 export const ROOM_CLOSE_DELAY_MS = 60 * 60 * 1000;
 
 export class RoomManager {
   private rooms = new Map<string, RoomEntry>();
   private roomCloseTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private completedGames: CompletedGame[] = [];
   private testSeed = '0';
   private aiProvider = this.buildProvider();
   private onRoomStateChange?: (roomId: string, state: GameState) => void;
@@ -115,7 +106,25 @@ export class RoomManager {
       bannedUsernames: new Set(),
     });
 
+    engine.scheduleQuestionPreload();
+
     return roomId;
+  }
+
+  recordCompletedGame(
+    roomId: string,
+    winner: 'humans' | 'snakes' | null,
+    durationMs: number,
+    hadBots: boolean,
+    startedAt: number
+  ): void {
+    analyticsStore.recordCompletedGame({
+      roomId,
+      winner,
+      durationMs,
+      hadBots,
+      startedAt,
+    });
   }
 
   scheduleRoomClose(roomId: string, delayMs = ROOM_CLOSE_DELAY_MS): void {
@@ -204,20 +213,14 @@ export class RoomManager {
     const room = this.rooms.get(roomId);
     if (room) {
       const state = room.engine.getState();
-      if (state.startedAt) {
-        this.completedGames.push({
+      if (state.startedAt && state.phase === 'ended') {
+        this.recordCompletedGame(
           roomId,
-          winner: state.winner as 'humans' | 'snakes' | null,
-          durationMs: (state.endedAt ?? Date.now()) - state.startedAt,
-          hadBots: state.players.some((p) => p.isBot),
-          startedAt: state.startedAt,
-        });
-        // Record to persistent leaderboard (only real human players)
-        leaderboard.recordGame({
-          roomId,
-          players: state.players,
-          winner: state.winner as 'humans' | 'snakes' | null,
-        });
+          state.winner as 'humans' | 'snakes' | null,
+          (state.endedAt ?? Date.now()) - state.startedAt,
+          state.players.some((p) => p.isBot),
+          state.startedAt
+        );
       }
       room.engine.destroy();
       this.rooms.delete(roomId);
@@ -240,35 +243,12 @@ export class RoomManager {
   }
 
   getAnalytics(): Analytics {
-    const total = this.completedGames.length;
     const active = this.rooms.size;
     const totalPlayers = Array.from(this.rooms.values()).reduce(
       (sum, r) => sum + r.engine.getState().players.filter((p) => !p.isSpectator).length,
       0
     );
-
-    const humanWins = this.completedGames.filter((g) => g.winner === 'humans').length;
-    const snakeWins = this.completedGames.filter((g) => g.winner === 'snakes').length;
-    const avgDuration = total > 0
-      ? this.completedGames.reduce((sum, g) => sum + g.durationMs, 0) / total
-      : 0;
-
-    const botGames = this.completedGames.filter((g) => g.hadBots);
-    const humanGames = this.completedGames.filter((g) => !g.hadBots);
-
-    return {
-      totalGames: total,
-      activeGames: active,
-      totalPlayers,
-      avgGameDurationMs: avgDuration,
-      humanWins,
-      snakeWins,
-      aiVsHumanWinRate: {
-        ai: botGames.length,
-        human: humanGames.length,
-      },
-      votePatternsPerRound: [],
-    };
+    return analyticsStore.buildAnalytics(active, totalPlayers);
   }
 
   getAdminState(): AdminState {
@@ -283,7 +263,7 @@ export class RoomManager {
     for (const roomId of [...this.rooms.keys()]) {
       this.closeRoom(roomId);
     }
-    this.completedGames = [];
+    analyticsStore.clear();
   }
 
   setTestSeed(seed: string): void {

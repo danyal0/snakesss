@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import { useNavigate } from 'react-router-dom';
@@ -56,6 +56,8 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
     ...lobbySwipeHandlers
   } = useSwipeTabs(LOBBY_TABS, tab, setTab);
   const [settings, setSettings] = useState<RoomSettings>(gameState.settings);
+  const settingsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settingsDirtyRef = useRef(false);
   const [copied, setCopied] = useState(false);
   const [botLoading, setBotLoading] = useState<BotPersona | null>(null);
   const [botError, setBotError] = useState('');
@@ -108,12 +110,53 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
     kickPlayerFromRoom(targetId);
   };
 
-  const handleSaveSettings = () => {
-    updateSettings(settings);
-  };
+  useEffect(() => {
+    if (!settingsDirtyRef.current) {
+      setSettings(gameState.settings);
+    }
+  }, [gameState.settings]);
+
+  const flushSettings = useCallback(() => {
+    if (settingsDebounceRef.current) {
+      clearTimeout(settingsDebounceRef.current);
+      settingsDebounceRef.current = null;
+    }
+    if (settingsDirtyRef.current && isManager) {
+      updateSettings(settings);
+      settingsDirtyRef.current = false;
+    }
+  }, [isManager, settings, updateSettings]);
+
+  const patchSettings = useCallback(
+    (partial: Partial<RoomSettings>, debounceMs = 350) => {
+      if (!isManager) return;
+      settingsDirtyRef.current = true;
+      setSettings((prev) => ({ ...prev, ...partial }));
+      if (settingsDebounceRef.current) clearTimeout(settingsDebounceRef.current);
+      if (debounceMs <= 0) {
+        updateSettings(partial);
+        settingsDirtyRef.current = false;
+        return;
+      }
+      settingsDebounceRef.current = setTimeout(() => {
+        updateSettings(partial);
+        settingsDirtyRef.current = false;
+        settingsDebounceRef.current = null;
+      }, debounceMs);
+    },
+    [isManager, updateSettings]
+  );
+
+  useEffect(
+    () => () => {
+      if (settingsDebounceRef.current) clearTimeout(settingsDebounceRef.current);
+    },
+    []
+  );
 
   const handleStart = () => {
     if (startLoading) return;
+    flushSettings();
     setStartLoading(true);
     setStartError('');
     startGame();
@@ -457,7 +500,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   placeholder="e.g. World capitals, 90s movies, Biology"
                   value={settings.questionTopic ?? ''}
                   onChange={(e) =>
-                    setSettings({ ...settings, questionTopic: e.target.value })
+                    patchSettings({ questionTopic: e.target.value }, 500)
                   }
                   disabled={!isManager}
                   maxLength={80}
@@ -468,7 +511,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                       key={preset}
                       type="button"
                       data-testid={`lobby-question-topic-preset-${preset.replace(/\s+/g, '-').replace(/&/g, 'and')}`}
-                      onClick={() => setSettings({ ...settings, questionTopic: preset })}
+                      onClick={() => patchSettings({ questionTopic: preset }, 0)}
                       disabled={!isManager}
                       className={clsx(
                         'text-xs px-2.5 py-1 rounded-full border transition-colors disabled:opacity-40',
@@ -491,7 +534,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   <Toggle
                     data-testid="lobby-ai-questions-toggle"
                     value={settings.aiQuestionsEnabled ?? true}
-                    onChange={(v) => setSettings({ ...settings, aiQuestionsEnabled: v })}
+                    onChange={(v) => patchSettings({ aiQuestionsEnabled: v }, 0)}
                     disabled={!isManager}
                   />
                 </div>
@@ -501,7 +544,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                 <SettingRow
                   label="Max Players"
                   value={settings.maxPlayers}
-                  onChange={(v) => setSettings({ ...settings, maxPlayers: v })}
+                  onChange={(v) => patchSettings({ maxPlayers: v })}
                   min={3} max={12} step={1}
                   disabled={!isManager}
                 />
@@ -510,7 +553,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   label="Discussion Timer"
                   value={settings.discussionTimer}
                   suffix="s"
-                  onChange={(v) => setSettings({ ...settings, discussionTimer: v })}
+                  onChange={(v) => patchSettings({ discussionTimer: v })}
                   min={30} max={300} step={15}
                   disabled={!isManager}
                 />
@@ -519,7 +562,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   label="Vote Timer"
                   value={settings.voteTimer}
                   suffix="s"
-                  onChange={(v) => setSettings({ ...settings, voteTimer: v })}
+                  onChange={(v) => patchSettings({ voteTimer: v })}
                   min={15} max={60} step={5}
                   disabled={!isManager}
                 />
@@ -528,7 +571,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   label="Snake Peek"
                   value={settings.snakePeekTimer ?? settings.questionTimer}
                   suffix="s"
-                  onChange={(v) => setSettings({ ...settings, snakePeekTimer: v })}
+                  onChange={(v) => patchSettings({ snakePeekTimer: v })}
                   min={5} max={90} step={5}
                   disabled={!isManager}
                 />
@@ -537,8 +580,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   label="Snakes"
                   value={settings.roleDistribution.snakes}
                   onChange={(v) =>
-                    setSettings({
-                      ...settings,
+                    patchSettings({
                       roleDistribution: { ...settings.roleDistribution, snakes: v },
                     })
                   }
@@ -553,7 +595,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   </div>
                   <Toggle
                     value={settings.advancedRoles}
-                    onChange={(v) => setSettings({ ...settings, advancedRoles: v })}
+                    onChange={(v) => patchSettings({ advancedRoles: v }, 0)}
                     disabled={!isManager}
                   />
                 </div>
@@ -565,7 +607,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   </div>
                   <Toggle
                     value={settings.isPrivate}
-                    onChange={(v) => setSettings({ ...settings, isPrivate: v })}
+                    onChange={(v) => patchSettings({ isPrivate: v }, 0)}
                     disabled={!isManager}
                   />
                 </div>
@@ -576,21 +618,16 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   </div>
                   <Toggle
                     value={settings.allowSpectators}
-                    onChange={(v) => setSettings({ ...settings, allowSpectators: v })}
+                    onChange={(v) => patchSettings({ allowSpectators: v }, 0)}
                     disabled={!isManager}
                   />
                 </div>
               </GlassCard>
 
               {isManager && (
-                <Button
-                  variant="secondary"
-                  size="md"
-                  className="w-full"
-                  onClick={handleSaveSettings}
-                >
-                  Save Settings
-                </Button>
+                <p className="text-xs text-white/35 text-center pb-1">
+                  Settings save automatically
+                </p>
               )}
           </div>
         </SwipeCarousel>

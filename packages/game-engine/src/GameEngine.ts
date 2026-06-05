@@ -37,7 +37,14 @@ export class GameEngine {
   private answerMap: Map<string, VoteChoice> = new Map(); // hidden until reveal
   private usedQuestionTopics: string[] = [];
   private phaseTimer: ReturnType<typeof setTimeout> | null = null;
+  private preloadedQuestion: QuizQuestion | null = null;
+  private preloadPromise: Promise<QuizQuestion | null> | null = null;
+  private preloadKey: string | null = null;
+  private preloadTargetRound = 0;
+  private dealingStartedAt = 0;
   private xaiApiKey?: string;
+  private static readonly DEALING_MIN_MS = 900;
+  private static readonly DEALING_MAX_MS = 2200;
   private onStateChange?: (state: GameState) => void;
   private onEvent?: (event: GameEvent) => void;
   private onPhaseEnd?: (phase: GamePhase) => void;
@@ -100,6 +107,7 @@ export class GameEngine {
     };
 
     this.emit('player_joined', { player: manager });
+    this.scheduleQuestionPreload();
   }
 
   // ─── Callbacks ────────────────────────────────────────────────────────────
@@ -244,8 +252,95 @@ export class GameEngine {
   }
 
   updateSettings(settings: Partial<RoomSettings>): void {
+    const prev = this.state.settings;
     this.state = { ...this.state, settings: { ...this.state.settings, ...settings } };
     this.notifyStateChange();
+    const topicChanged =
+      settings.questionTopic !== undefined &&
+      settings.questionTopic !== prev.questionTopic;
+    const aiChanged =
+      settings.aiQuestionsEnabled !== undefined &&
+      settings.aiQuestionsEnabled !== prev.aiQuestionsEnabled;
+    if (this.state.phase === 'lobby' && (topicChanged || aiChanged)) {
+      this.scheduleQuestionPreload();
+    }
+  }
+
+  /** Background-fetch the next question when idle (lobby, scores, or between rounds). */
+  scheduleQuestionPreload(targetRound?: number): void {
+    const round = targetRound ?? (this.state.round > 0 ? this.state.round + 1 : 1);
+    const phase = this.state.phase;
+    const canPreload =
+      phase === 'lobby' ||
+      phase === 'scores' ||
+      phase === 'ended' ||
+      phase === 'dealing';
+    if (!canPreload) return;
+
+    const key = this.buildPreloadKey(round);
+    if (this.preloadKey === key && (this.preloadedQuestion || this.preloadPromise)) {
+      return;
+    }
+
+    this.preloadKey = key;
+    this.preloadTargetRound = round;
+    this.preloadedQuestion = null;
+    this.preloadPromise = this.loadQuestionForRound(round)
+      .then((question) => {
+        if (this.preloadKey !== key) return null;
+        this.preloadedQuestion = question;
+        this.maybeFinishDealingEarly();
+        return question;
+      })
+      .catch(() => null)
+      .finally(() => {
+        if (this.preloadKey === key) this.preloadPromise = null;
+      });
+  }
+
+  private buildPreloadKey(round: number): string {
+    const { aiQuestionsEnabled, questionTopic } = this.state.settings;
+    const topic = questionTopic?.trim() ?? '';
+    return `${round}|${topic}|${aiQuestionsEnabled !== false}`;
+  }
+
+  private async loadQuestionForRound(round: number): Promise<QuizQuestion> {
+    const { aiQuestionsEnabled, questionTopic } = this.state.settings;
+    const topic = questionTopic?.trim() || undefined;
+    const useAi = Boolean(this.xaiApiKey) && aiQuestionsEnabled !== false;
+    return useAi
+      ? await fetchApprovedQuestion(this.xaiApiKey!, {
+          topic,
+          usedTopics: this.usedQuestionTopics,
+        })
+      : getRandomQuestion();
+  }
+
+  private consumePreloadedQuestion(round: number): Promise<QuizQuestion> {
+    if (this.preloadedQuestion && this.preloadTargetRound === round) {
+      const q = this.preloadedQuestion;
+      this.preloadedQuestion = null;
+      this.preloadKey = null;
+      return Promise.resolve(q);
+    }
+    if (this.preloadPromise && this.preloadTargetRound === round) {
+      return this.preloadPromise.then(
+        (q) => q ?? this.loadQuestionForRound(round)
+      );
+    }
+    return this.loadQuestionForRound(round);
+  }
+
+  private maybeFinishDealingEarly(): void {
+    if (this.state.phase !== 'dealing' || !this.preloadedQuestion) return;
+    const elapsed = Date.now() - this.dealingStartedAt;
+    const wait = GameEngine.DEALING_MIN_MS - elapsed;
+    if (wait > 0) {
+      setTimeout(() => this.maybeFinishDealingEarly(), wait);
+      return;
+    }
+    this.clearPhaseTimer();
+    if (!this.state.isPaused) this.onPhaseEnd?.('dealing');
   }
 
   // ─── Game Start ───────────────────────────────────────────────────────────
@@ -269,23 +364,20 @@ export class GameEngine {
 
     this.emit('game_started', { playerCount: activePlayers.length });
     this.notifyStateChange();
-    this.schedulePhaseEnd('dealing', 4000);
+    this.dealingStartedAt = Date.now();
+    this.scheduleQuestionPreload(this.state.round);
+    this.schedulePhaseEnd('dealing', GameEngine.DEALING_MAX_MS);
     return { success: true };
   }
 
   // ─── Question Phase ───────────────────────────────────────────────────────
 
   async transitionToQuestion(): Promise<void> {
-    const { aiQuestionsEnabled, questionTopic } = this.state.settings;
+    const { questionTopic } = this.state.settings;
     const topic = questionTopic?.trim() || undefined;
-    const useAi = Boolean(this.xaiApiKey) && aiQuestionsEnabled !== false;
+    const round = this.state.round;
 
-    const question = useAi
-      ? await fetchApprovedQuestion(this.xaiApiKey!, {
-          topic,
-          usedTopics: this.usedQuestionTopics,
-        })
-      : getRandomQuestion();
+    const question = await this.consumePreloadedQuestion(round);
 
     const topicTag = topic ?? question.text.split(' ').slice(0, 3).join(' ');
     this.usedQuestionTopics.push(topicTag);
@@ -305,6 +397,7 @@ export class GameEngine {
     this.emit('question_shown', { questionId: question.id });
     this.notifyStateChange();
     this.schedulePhaseEnd('question', peekMs);
+    this.scheduleQuestionPreload(round + 1);
   }
 
   submitAnswer(
@@ -485,6 +578,7 @@ export class GameEngine {
     this.state = { ...this.state, phase: 'scores', phaseEndsAt: null };
     this.notifyStateChange();
     this.schedulePhaseEnd('scores', 4000);
+    this.scheduleQuestionPreload(this.state.round + 1);
   }
 
   nextRound(): void {
@@ -729,5 +823,10 @@ export class GameEngine {
     this.onStateChange?.(this.getPublicState());
   }
 
-  destroy(): void { this.clearPhaseTimer(); }
+  destroy(): void {
+    this.clearPhaseTimer();
+    this.preloadedQuestion = null;
+    this.preloadPromise = null;
+    this.preloadKey = null;
+  }
 }

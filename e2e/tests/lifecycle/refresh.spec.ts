@@ -30,7 +30,7 @@ test.describe('Browser refresh & resume', () => {
     await expect(page.getByTestId('btn-start-game')).toBeEnabled({ timeout: 20_000 });
 
     await lobbyPage.switchTab('settings');
-    await expect(page.getByRole('button', { name: /Save Settings/i })).toBeVisible();
+    await expect(page.getByText(/Settings save automatically/i)).toBeVisible();
     await lobbyPage.switchTab('players');
     await expect(page.getByRole('button', { name: 'Kick' }).first()).toBeVisible();
     await expect(page.getByTestId('btn-start-game')).toBeEnabled({ timeout: 15_000 });

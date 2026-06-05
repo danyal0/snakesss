@@ -17,7 +17,7 @@ test.describe('Room manager flows', () => {
     await homePage.openCreateRoom('Manager');
     await lobbyPage.switchTab('settings');
     await lobbyPage.expectQuestionCategoryVisible();
-    await expect(page.getByRole('button', { name: /Save Settings/i })).toBeVisible();
+    await expect(page.getByText(/Settings save automatically/i)).toBeVisible();
     await lobbyPage.switchTab('bots');
     await lobbyPage.addBot('aggressive');
     await lobbyPage.addBot('silent_strategist');

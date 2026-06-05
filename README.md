@@ -46,13 +46,16 @@ CLIENT_ORIGIN=https://your-app.railway.app
 ADMIN_ORIGIN=https://your-app.railway.app
 ```
 
-5. Deploy → server starts on `:3001`, web on `/`, admin on `/admin`
+5. **Attach a volume** mounted at `/app/data` (persists leaderboard + admin analytics across deploys)
+6. Set `DATA_DIR=/app/data` (default in Dockerfile)
+7. Deploy → server starts on `:3001`, web on `/`, admin on `/admin`
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3001` | Server port |
+| `DATA_DIR` | `./data` (local) / `/app/data` (Docker) | Leaderboard + analytics JSON storage |
 | `JWT_SECRET` | `snakesss-dev-secret...` | JWT signing key |
 | `ADMIN_PASSWORD` | `admin123` | Admin panel password |
 | `XAI_API_KEY` | — | xAI API key (AI bots) |
