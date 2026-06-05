@@ -14,6 +14,7 @@ import {
   applyRoomIdentity,
   getRoomIdFromPath,
   loadSession,
+  mergeSessionSave,
   syncPlayerIdentityFromState,
   saveSession,
 } from './useSession';
@@ -72,13 +73,15 @@ function rejoinFromSession(socket: AppSocket, roomId: string): void {
         }
         handleJoinSuccess(result, meta, roomId, session.username, session.avatar, socket.id ?? null);
         const { displayUsername } = applyJoinMeta(meta);
-        saveSession({
-          roomId,
+        const me = useGameStore.getState().playerId
+          ? result.players.find((p) => p.id === useGameStore.getState().playerId)
+          : undefined;
+        mergeSessionSave(roomId, {
           username: session.username,
           displayName: displayUsername || session.username,
           avatar: session.avatar,
           playerId: useGameStore.getState().playerId ?? undefined,
-          savedAt: Date.now(),
+          wasRoomManager: me?.isRoomManager,
         });
       }
     );
@@ -301,14 +304,16 @@ export function useSocket() {
               const { displayUsername } = applyJoinMeta(meta);
               const effectiveName = displayUsername || username;
               const queued = result.phase !== 'lobby' && asSpectator;
-              saveSession({
-                roomId,
+              const me = useGameStore.getState().playerId
+                ? result.players.find((p) => p.id === useGameStore.getState().playerId)
+                : undefined;
+              mergeSessionSave(roomId, {
                 username,
                 displayName: effectiveName,
                 avatar,
                 playerId: useGameStore.getState().playerId ?? undefined,
+                wasRoomManager: me?.isRoomManager,
                 queuedForNextGame: queued,
-                savedAt: Date.now(),
               });
               saveUserProfile({ username: effectiveName, avatar: avatar as AvatarEmoji, activeRoomId: roomId });
               setActiveRoom(roomId, { queue: queued });

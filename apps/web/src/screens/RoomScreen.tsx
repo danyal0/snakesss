@@ -5,6 +5,7 @@ import { getSocket, useSocket } from '../hooks/useSocket';
 import {
   loadSession,
   clearSession,
+  mergeSessionSave,
   saveSession,
   isRegisteredPlayer,
 } from '../hooks/useSession';
@@ -92,12 +93,11 @@ export function RoomScreen() {
           ? st?.players.find((p) => p.id === useGameStore.getState().playerId)
           : undefined;
         const queued = !!meAfter?.isSpectator && st?.phase !== 'lobby';
-        saveSession({
-          roomId: code,
+        mergeSessionSave(code, {
           username,
           avatar,
           playerId: useGameStore.getState().playerId ?? undefined,
-          savedAt: Date.now(),
+          wasRoomManager: meAfter?.isRoomManager,
           queuedForNextGame: queued,
         });
         saveUserProfile({ username, avatar });

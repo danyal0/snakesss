@@ -309,7 +309,7 @@ export function LobbyScreen({ gameState }: LobbyScreenProps) {
                   {player.id === playerId ? (
                     <PlayerAvatar emoji={player.avatar} playerId={player.id} size="sm" isMe showMic />
                   ) : (
-                    <AvatarDisplay emoji={player.avatar} size="sm" isMe={false} />
+                    <PlayerAvatar emoji={player.avatar} playerId={player.id} size="sm" />
                   )}
 
                   <div className="flex-1 min-w-0">

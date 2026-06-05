@@ -54,6 +54,10 @@ export class GameEngine {
   private static readonly CHAT_BURST_WINDOW_MS = 10_000;
   private static readonly CHAT_BURST_MAX = 8;
   private static readonly CHAT_MIN_INTERVAL_MS = 400;
+  /** Grace period before reassigning manager on disconnect (covers page refresh). */
+  private static readonly MANAGER_TRANSFER_GRACE_MS = 12_000;
+  private managerTransferTimer: ReturnType<typeof setTimeout> | null = null;
+  private managerTransferFromId: string | null = null;
 
 
   constructor(options: CreateRoomOptions) {
@@ -198,6 +202,34 @@ export class GameEngine {
     return { success: true };
   }
 
+  private cancelPendingManagerTransfer(): void {
+    if (this.managerTransferTimer) {
+      clearTimeout(this.managerTransferTimer);
+      this.managerTransferTimer = null;
+      this.managerTransferFromId = null;
+    }
+  }
+
+  private transferManagerFrom(disconnectedId: string): void {
+    const nextManager = this.state.players.find(
+      (p) =>
+        p.id !== disconnectedId &&
+        p.isConnected &&
+        !p.isSpectator &&
+        (this.state.phase !== 'lobby' || !p.isBot)
+    );
+    if (!nextManager) return;
+
+    this.state = {
+      ...this.state,
+      players: this.state.players.map((p) => ({
+        ...p,
+        isRoomManager: p.id === nextManager.id,
+      })),
+    };
+    this.notifyStateChange();
+  }
+
   removePlayer(id: string): void {
     const leaving = this.state.players.find((p) => p.id === id);
     const wasManager = leaving?.isRoomManager ?? false;
@@ -205,22 +237,16 @@ export class GameEngine {
     this.updatePlayer(id, { isConnected: false, lastSeenAt: Date.now() });
 
     if (wasManager && this.state.phase !== 'ended') {
-      const nextManager = this.state.players.find(
-        (p) =>
-          p.id !== id &&
-          p.isConnected &&
-          !p.isSpectator &&
-          (this.state.phase !== 'lobby' || !p.isBot)
-      );
-      if (nextManager) {
-        this.state = {
-          ...this.state,
-          players: this.state.players.map((p) => ({
-            ...p,
-            isRoomManager: p.id === nextManager.id,
-          })),
-        };
-      }
+      this.cancelPendingManagerTransfer();
+      this.managerTransferFromId = id;
+      this.managerTransferTimer = setTimeout(() => {
+        this.managerTransferTimer = null;
+        this.managerTransferFromId = null;
+        const stillOffline = this.state.players.find((p) => p.id === id);
+        if (stillOffline && !stillOffline.isConnected) {
+          this.transferManagerFrom(id);
+        }
+      }, GameEngine.MANAGER_TRANSFER_GRACE_MS);
     }
 
     this.emit('player_left', { playerId: id });
@@ -240,6 +266,10 @@ export class GameEngine {
    * for role/score continuity. RoomManager updates the socket registry separately.
    */
   reconnectPlayer(existingPlayerId: string, _newSocketId: string): void {
+    if (this.managerTransferFromId === existingPlayerId) {
+      this.cancelPendingManagerTransfer();
+    }
+
     this.state = {
       ...this.state,
       players: this.state.players.map((p) =>

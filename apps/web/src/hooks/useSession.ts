@@ -20,6 +20,24 @@ export interface StoredSession {
 
 const SESSION_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
+/** Merge session fields so refresh/rejoin does not drop manager recreation flags. */
+export function mergeSessionSave(
+  roomId: string,
+  patch: Partial<StoredSession> & Pick<StoredSession, 'username' | 'avatar'>
+): void {
+  const existing = loadSession(roomId);
+  saveSession({
+    roomId,
+    username: patch.username,
+    avatar: patch.avatar,
+    displayName: patch.displayName ?? existing?.displayName,
+    playerId: patch.playerId ?? existing?.playerId,
+    wasRoomManager: patch.wasRoomManager ?? existing?.wasRoomManager,
+    queuedForNextGame: patch.queuedForNextGame ?? existing?.queuedForNextGame,
+    savedAt: Date.now(),
+  });
+}
+
 export function saveSession(session: StoredSession): void {
   try {
     localStorage.setItem(
@@ -104,13 +122,11 @@ export function applyRoomIdentity(
   );
   useGameStore.setState({ playerId, username, gameState: state });
   const me = playerId ? state.players.find((p) => p.id === playerId) : undefined;
-  saveSession({
-    roomId,
+  mergeSessionSave(roomId, {
     username,
     avatar,
     playerId: playerId ?? undefined,
     wasRoomManager: me?.isRoomManager,
-    savedAt: Date.now(),
   });
 }
 
