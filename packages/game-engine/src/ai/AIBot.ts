@@ -23,6 +23,11 @@ import {
   PersonaConfig,
 } from './personas';
 import { weightedRandom } from '../utils';
+import {
+  buildSystemPrompt,
+  buildDiscussionPrompt,
+  buildVoteRationalePrompt,
+} from './prompts';
 
 const OPTION_LABELS: AnswerIndex[] = [0, 1, 2];
 const OPTION_LETTERS = ['A', 'B', 'C'] as const;
@@ -164,7 +169,7 @@ export class XAIProvider implements AIProvider {
 
   async generateMessage(ctx: AIContext): Promise<string> {
     const systemPrompt = buildSystemPrompt(ctx);
-    const userPrompt = buildChatPrompt(ctx);
+    const userPrompt = buildDiscussionPrompt(ctx);
 
     try {
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -179,7 +184,7 @@ export class XAIProvider implements AIProvider {
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },
           ],
-          max_tokens: 80,
+          max_tokens: 100,
           temperature:
             ctx.persona === 'chaotic_liar' ? 1.2 : ctx.persona === 'silent_strategist' ? 0.4 : 0.8,
         }),
@@ -201,7 +206,7 @@ export class XAIProvider implements AIProvider {
   async generateVoteRationale(ctx: AIContext, targetId: string): Promise<string> {
     const target = ctx.alivePlayers.find((p) => p.id === targetId);
     const systemPrompt = buildSystemPrompt(ctx);
-    const prompt = `In 1 sentence, explain why you're voting to eliminate ${target?.username ?? 'this player'}. Stay in character.`;
+    const prompt = buildVoteRationalePrompt(target?.username ?? 'this player');
 
     try {
       const response = await fetch(`${this.baseUrl}/chat/completions`, {
@@ -682,73 +687,3 @@ function inferAnswerFromDiscussion(
   return scores[best] > 0 ? best : undefined;
 }
 
-function buildSystemPrompt(ctx: AIContext): string {
-  const roleDesc =
-    ctx.role === 'snake'
-      ? 'You are secretly a SNAKE. Mislead humans into picking the WRONG trivia answer. Pick one wrong option and defend it consistently until others agree.'
-      : ctx.role === 'mongoose'
-        ? 'You are the MONGOOSE. You are not a Snake, but you do not know the correct answer. Debate, spot suspicious players, and pick the best answer you can infer from chat.'
-        : 'You are a HUMAN. Find the correct trivia answer and identify Snakes through discussion.';
-
-  const personaDesc: Record<BotPersona, string> = {
-    aggressive: 'You are loud, accusatory, and confrontational. You call people out directly.',
-    silent_strategist:
-      'You are calculating and quiet. You only speak when it matters. Short sentences.',
-    chaotic_liar:
-      'You are chaotic and unpredictable. You contradict yourself, make jokes, and derail.',
-  };
-
-  let strategy = '';
-  if (ctx.role === 'snake' && ctx.question && ctx.defendedAnswerIndex !== undefined) {
-    const letter = OPTION_LETTERS[ctx.defendedAnswerIndex];
-    const text = ctx.question.options[ctx.defendedAnswerIndex];
-    strategy = `\nYour secret plan: convince everyone that ${letter} (${text}) is correct. Never admit the real answer. Stick to this line.`;
-  } else if (ctx.role !== 'snake' && ctx.primarySuspectName) {
-    strategy = `\nYou suspect ${ctx.primarySuspectName} might be a Snake. Press them if they push a bad answer.`;
-  }
-
-  if (ctx.answerLocked && ctx.chosenAnswer !== undefined && ctx.chosenAnswer !== 'snake') {
-    const letter = OPTION_LETTERS[ctx.chosenAnswer as AnswerIndex];
-    strategy += `\nYou have decided on answer ${letter}. Reinforce that choice.`;
-  }
-
-  return `You are playing a social deduction game called Snakesss.
-${roleDesc}
-Persona: ${personaDesc[ctx.persona]}
-Round: ${ctx.round}
-Players alive: ${ctx.alivePlayers.map((p) => p.username).join(', ')}
-Your name: ${ctx.botPlayer.username}
-${strategy}
-
-Rules:
-- Keep messages under 80 characters
-- Never break character
-- Never mention game mechanics directly
-- Sound human and natural
-- Do not use quotation marks around your message`;
-}
-
-function buildChatPrompt(ctx: AIContext): string {
-  const recent = ctx.recentMessages
-    .slice(-8)
-    .map((m) => `${m.playerName}: ${m.content}`)
-    .join('\n');
-
-  const ownPast = ctx.memory.chatHistory.slice(-3).map((m) => `You (earlier): ${m}`).join('\n');
-
-  const accused =
-    ctx.accusedBy.length > 0 ? `You were just accused by: ${ctx.accusedBy.join(', ')}.` : '';
-
-  let questionBlock = '';
-  if (ctx.question) {
-    const opts = ctx.question.options
-      .map((o, i) => `${OPTION_LETTERS[i]}: ${o}`)
-      .join(' | ');
-    questionBlock = `Question: ${ctx.question.text}\nOptions: ${opts}\n`;
-    if (ctx.role === 'snake' && ctx.correctIndex !== undefined) {
-      questionBlock += `(Secret: correct is ${OPTION_LETTERS[ctx.correctIndex]} — do NOT reveal this.)\n`;
-    }
-  }
-
-  return `${questionBlock}Recent chat:\n${recent}\n\nYour prior lines:\n${ownPast}\n\n${accused}\n\nWhat do you say? (one short message, no quotes)`;
-}

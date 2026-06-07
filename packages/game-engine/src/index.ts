@@ -7,6 +7,16 @@ export type { AIProvider, AIContext } from './ai/AIBot';
 export { PERSONAS } from './ai/personas';
 export type { PersonaConfig } from './ai/personas';
 export {
+  buildRolePrompt,
+  buildPersonaPrompt,
+  buildStrategyBlock,
+  buildSystemPrompt,
+  buildDiscussionPrompt,
+  buildVoteRationalePrompt,
+  buildAnswerPrompt,
+} from './ai/prompts';
+export type { PromptContext } from './ai/prompts';
+export {
   getRandomQuestion,
   generateAIQuestion,
   fetchApprovedQuestion,
