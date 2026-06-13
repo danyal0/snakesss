@@ -3,10 +3,9 @@ import type { VoiceSpeakingPayload } from '@snakesss/shared-types';
 import { getSocket } from './useSocket';
 import { useGameStore } from '../store/gameStore';
 import {
-  isIceCandidate,
-  isSessionDescription,
-  remotePeerIds,
-  shouldInitiateOffer,
+  isRtcSignalData,
+  toSessionDescription,
+  type RtcSignalData,
 } from '../utils/voiceSignaling';
 
 export type VoiceMode = 'open' | 'push';
@@ -70,6 +69,7 @@ declare global {
 export function useVoiceChat(enabled: boolean) {
   const playerId = useGameStore((s) => s.playerId);
   const roomId = useGameStore((s) => s.gameState?.roomId);
+  const roomPlayerIds = useGameStore((s) => s.gameState?.players.map((p) => p.id) ?? []);
   const [voiceMode, setVoiceModeState] = useState<VoiceMode>(loadVoiceMode);
   const [micEnabled, setMicEnabled] = useState(false);
   const [micMuted, setMicMuted] = useState(false);
@@ -78,7 +78,6 @@ export function useVoiceChat(enabled: boolean) {
 
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const pendingIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const remoteTrackRef = useRef<Map<string, boolean>>(new Map());
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -110,136 +109,124 @@ export function useVoiceChat(enabled: boolean) {
     }
   }, []);
 
-  const emitSignal = useCallback((targetId: string, signal: unknown) => {
-    getSocket().emit('voice:signal', { targetId, signal });
+  const emitSignal = useCallback((targetId: string, data: RtcSignalData) => {
+    getSocket().emit('voice:signal', { targetId, signal: data });
   }, []);
 
-  const flushPendingIce = useCallback(async (remoteId: string, pc: RTCPeerConnection) => {
-    const pending = pendingIceRef.current.get(remoteId) ?? [];
-    if (pending.length === 0) return;
-    pendingIceRef.current.delete(remoteId);
-    for (const candidate of pending) {
-      try {
-        await pc.addIceCandidate(candidate);
-      } catch {
-        // stale candidate
-      }
+  const removePeer = useCallback((peerId: string) => {
+    const pc = peersRef.current.get(peerId);
+    if (pc) {
+      pc.close();
+      peersRef.current.delete(peerId);
+    }
+    remoteTrackRef.current.delete(peerId);
+    const audio = document.querySelector(`audio[data-peer-id="${peerId}"]`);
+    if (audio?.parentNode) {
+      audio.parentNode.removeChild(audio);
     }
   }, []);
 
-  const addLocalTracks = useCallback(
-    async (pc: RTCPeerConnection, remoteId: string) => {
-      const stream = localStreamRef.current;
-      if (!stream) return;
-
-      let added = false;
-      for (const track of stream.getTracks()) {
-        const sender = pc.getSenders().find((s) => s.track?.kind === track.kind);
-        if (sender) {
-          await sender.replaceTrack(track);
-        } else {
-          pc.addTrack(track, stream);
-          added = true;
-        }
+  const addLocalTracks = useCallback((pc: RTCPeerConnection) => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    stream.getTracks().forEach((track) => {
+      const sender = pc.getSenders().find((s) => s.track?.kind === track.kind);
+      if (sender) {
+        void sender.replaceTrack(track);
+      } else {
+        pc.addTrack(track, stream);
       }
+    });
+  }, []);
 
-      if (added && pc.signalingState === 'stable' && shouldInitiateOffer(playerIdRef.current ?? '', remoteId)) {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        emitSignal(remoteId, offer);
+  const createPeerConnection = useCallback(
+    (peerId: string, isInitiator: boolean): RTCPeerConnection => {
+      const existing = peersRef.current.get(peerId);
+      if (existing) {
+        addLocalTracks(existing);
+        return existing;
       }
-    },
-    [emitSignal]
-  );
-
-  const createPeer = useCallback(
-    async (remoteId: string, initiator: boolean) => {
-      const selfId = playerIdRef.current;
-      if (!selfId || peersRef.current.has(remoteId)) return;
 
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      peersRef.current.set(remoteId, pc);
-      pendingIceRef.current.set(remoteId, []);
+      peersRef.current.set(peerId, pc);
 
-      pc.onicecandidate = (ev) => {
-        if (!ev.candidate) return;
-        emitSignal(remoteId, ev.candidate.toJSON());
+      addLocalTracks(pc);
+
+      pc.onicecandidate = (event) => {
+        if (!event.candidate) return;
+        emitSignal(peerId, { type: 'candidate', candidate: event.candidate.toJSON() });
       };
 
-      pc.ontrack = (ev) => {
-        const remoteStream = ev.streams[0] ?? new MediaStream([ev.track]);
-        remoteTrackRef.current.set(remoteId, true);
-        attachStreamToAudio(remoteId, remoteStream);
+      pc.ontrack = (event) => {
+        const [remoteStream] = event.streams;
+        const stream = remoteStream ?? new MediaStream([event.track]);
+        remoteTrackRef.current.set(peerId, true);
+        attachStreamToAudio(peerId, stream);
       };
 
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'failed') {
-          pc.restartIce();
-        }
-      };
-
-      await addLocalTracks(pc, remoteId);
-
-      if (initiator) {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        emitSignal(remoteId, offer);
+      if (isInitiator) {
+        pc.onnegotiationneeded = async () => {
+          try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            emitSignal(peerId, { type: 'offer', sdp: offer });
+          } catch {
+            // negotiation race
+          }
+        };
       }
+
+      return pc;
     },
     [addLocalTracks, emitSignal]
   );
 
-  const connectToPeer = useCallback(
-    (remoteId: string) => {
-      const selfId = playerIdRef.current;
-      if (!selfId || remoteId === selfId || peersRef.current.has(remoteId)) return;
-      void createPeer(remoteId, shouldInitiateOffer(selfId, remoteId));
-    },
-    [createPeer]
-  );
+  const syncVoicePeers = useCallback(() => {
+    if (!micEnabledRef.current || !playerIdRef.current) return;
+
+    const selfId = playerIdRef.current;
+    const currentIds = roomPlayerIds.filter((id) => id !== selfId);
+
+    for (const id of [...peersRef.current.keys()]) {
+      if (!currentIds.includes(id)) {
+        removePeer(id);
+      }
+    }
+
+    currentIds.forEach((id) => {
+      createPeerConnection(id, true);
+    });
+  }, [createPeerConnection, removePeer, roomPlayerIds]);
 
   const handleSignal = useCallback(
     async (fromId: string, signal: unknown) => {
+      if (!isRtcSignalData(signal)) return;
+
       let pc = peersRef.current.get(fromId);
       if (!pc) {
-        await createPeer(fromId, false);
-        pc = peersRef.current.get(fromId);
+        pc = createPeerConnection(fromId, false);
       }
-      if (!pc) return;
 
-      if (isSessionDescription(signal)) {
+      try {
         if (signal.type === 'offer') {
-          if (pc.signalingState === 'have-local-offer') {
-            await pc.setLocalDescription({ type: 'rollback' });
-          }
-          await pc.setRemoteDescription(signal);
-          await flushPendingIce(fromId, pc);
+          const sdp = toSessionDescription(signal.sdp);
+          if (!sdp) return;
+          await pc.setRemoteDescription(sdp);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          emitSignal(fromId, answer);
-          await addLocalTracks(pc, fromId);
+          emitSignal(fromId, { type: 'answer', sdp: answer });
         } else if (signal.type === 'answer') {
-          await pc.setRemoteDescription(signal);
-          await flushPendingIce(fromId, pc);
+          const sdp = toSessionDescription(signal.sdp);
+          if (!sdp) return;
+          await pc.setRemoteDescription(sdp);
+        } else if (signal.type === 'candidate' && signal.candidate) {
+          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
         }
-        return;
-      }
-
-      if (isIceCandidate(signal)) {
-        if (!pc.remoteDescription) {
-          const queue = pendingIceRef.current.get(fromId) ?? [];
-          queue.push(signal);
-          pendingIceRef.current.set(fromId, queue);
-          return;
-        }
-        try {
-          await pc.addIceCandidate(signal);
-        } catch {
-          // stale candidate
-        }
+      } catch {
+        // stale or duplicate signal
       }
     },
-    [addLocalTracks, createPeer, emitSignal, flushPendingIce]
+    [createPeerConnection, emitSignal]
   );
 
   const monitorLocalAudio = useCallback(() => {
@@ -279,29 +266,22 @@ export function useVoiceChat(enabled: boolean) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-    peersRef.current.forEach((pc) => pc.close());
-    peersRef.current.clear();
-    pendingIceRef.current.clear();
-    remoteTrackRef.current.clear();
+    for (const id of [...peersRef.current.keys()]) {
+      removePeer(id);
+    }
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
     analyserRef.current = null;
     void audioContextRef.current?.close().catch(() => {});
     audioContextRef.current = null;
-    if (micEnabledRef.current) {
-      getSocket().emit('voice:leave');
-    }
     micEnabledRef.current = false;
     setSpeakingLevels({});
-  }, []);
+  }, [removePeer]);
 
   const enableMic = useCallback(async () => {
     if (!enabledRef.current || !roomId || !playerIdRef.current) return false;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-        video: false,
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
 
       const ctx = new AudioContext();
@@ -320,21 +300,14 @@ export function useVoiceChat(enabled: boolean) {
       setMicMuted(false);
       setPermissionDenied(false);
 
-      for (const [remoteId, pc] of peersRef.current) {
-        await addLocalTracks(pc, remoteId);
-      }
-
-      getSocket().emit('voice:join', (peers: string[]) => {
-        remotePeerIds(peers, playerIdRef.current ?? '').forEach((id) => connectToPeer(id));
-      });
-
+      syncVoicePeers();
       rafRef.current = requestAnimationFrame(monitorLocalAudio);
       return true;
     } catch {
       setPermissionDenied(true);
       return false;
     }
-  }, [addLocalTracks, connectToPeer, monitorLocalAudio, roomId]);
+  }, [monitorLocalAudio, roomId, syncVoicePeers]);
 
   const disableMic = useCallback(() => {
     setMicEnabled(false);
@@ -363,7 +336,6 @@ export function useVoiceChat(enabled: boolean) {
     }
   }, []);
 
-  // Stable socket listeners — use refs so we never miss voice:peers during mic enable.
   useEffect(() => {
     if (!enabled || !roomId) {
       disableMic();
@@ -371,11 +343,6 @@ export function useVoiceChat(enabled: boolean) {
     }
 
     const socket = getSocket();
-
-    const onPeers = (peerIds: string[]) => {
-      if (!micEnabledRef.current || !playerIdRef.current) return;
-      remotePeerIds(peerIds, playerIdRef.current).forEach((id) => connectToPeer(id));
-    };
 
     const onSignal = (fromId: string, signal: unknown) => {
       void handleSignal(fromId, signal);
@@ -388,16 +355,20 @@ export function useVoiceChat(enabled: boolean) {
       }));
     };
 
-    socket.on('voice:peers', onPeers);
     socket.on('voice:signal', onSignal);
     socket.on('voice:speaking', onSpeaking);
 
     return () => {
-      socket.off('voice:peers', onPeers);
       socket.off('voice:signal', onSignal);
       socket.off('voice:speaking', onSpeaking);
     };
-  }, [connectToPeer, disableMic, enabled, handleSignal, roomId]);
+  }, [disableMic, enabled, handleSignal, roomId]);
+
+  useEffect(() => {
+    if (micEnabled) {
+      syncVoicePeers();
+    }
+  }, [micEnabled, syncVoicePeers]);
 
   useEffect(() => {
     return () => {

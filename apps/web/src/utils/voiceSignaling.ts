@@ -1,19 +1,22 @@
-/** Lower stable player id always initiates the WebRTC offer (avoids glare). */
-export function shouldInitiateOffer(localId: string, remoteId: string): boolean {
-  return localId < remoteId;
+export type RtcSignalType = 'offer' | 'answer' | 'candidate';
+
+export interface RtcSignalData {
+  type: RtcSignalType;
+  sdp?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
 }
 
-export function isSessionDescription(
-  signal: unknown
-): signal is RTCSessionDescriptionInit {
-  const type = (signal as RTCSessionDescriptionInit | undefined)?.type;
-  return type === 'offer' || type === 'answer';
-}
-
-export function isIceCandidate(signal: unknown): signal is RTCIceCandidateInit {
+export function isRtcSignalData(signal: unknown): signal is RtcSignalData {
   if (!signal || typeof signal !== 'object') return false;
-  if (isSessionDescription(signal)) return false;
-  return 'candidate' in signal;
+  const type = (signal as RtcSignalData).type;
+  return type === 'offer' || type === 'answer' || type === 'candidate';
+}
+
+export function toSessionDescription(
+  init: RTCSessionDescriptionInit | undefined
+): RTCSessionDescription | null {
+  if (!init) return null;
+  return new RTCSessionDescription(init);
 }
 
 export function remotePeerIds(peerIds: string[], selfId: string): string[] {
