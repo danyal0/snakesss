@@ -19,6 +19,11 @@ export function toSessionDescription(
   return new RTCSessionDescription(init);
 }
 
+/** Lower stable player id always initiates the WebRTC offer (avoids glare). */
+export function shouldInitiateOffer(localId: string, remoteId: string): boolean {
+  return localId < remoteId;
+}
+
 export function remotePeerIds(peerIds: string[], selfId: string): string[] {
   return peerIds.filter((id) => id !== selfId);
 }

@@ -2,10 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   isRtcSignalData,
   remotePeerIds,
+  shouldInitiateOffer,
   toSessionDescription,
 } from './voiceSignaling';
 
 describe('voiceSignaling', () => {
+  it('picks exactly one initiator per pair', () => {
+    const a = 'player-aaa';
+    const b = 'player-bbb';
+    expect(shouldInitiateOffer(a, b)).toBe(true);
+    expect(shouldInitiateOffer(b, a)).toBe(false);
+    expect(shouldInitiateOffer(a, b) !== shouldInitiateOffer(b, a)).toBe(true);
+  });
+
   it('filters self from peer list', () => {
     expect(remotePeerIds(['a', 'b', 'a'], 'a')).toEqual(['b']);
   });
