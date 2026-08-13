@@ -63,20 +63,20 @@ export function RoomListPanel({ adminAction, spectateRoom }: RoomListPanelProps)
   };
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-white">Rooms</h2>
           <p className="text-white/40 text-sm">{rooms.length} total rooms</p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex w-full gap-2 sm:w-auto">
           {(['all', 'active', 'lobby'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={clsx(
-                'px-3 py-1.5 rounded-lg text-sm transition-all',
+                'min-h-11 flex-1 px-3 py-1.5 rounded-lg text-sm transition-all sm:min-h-0 sm:flex-none',
                 filter === f ? 'bg-white/15 text-white' : 'text-white/40 hover:text-white'
               )}
             >
@@ -100,9 +100,9 @@ export function RoomListPanel({ adminAction, spectateRoom }: RoomListPanelProps)
               transition={{ delay: i * 0.03 }}
               className="glass rounded-2xl p-4"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-2">
+                  <div className="flex flex-wrap items-center gap-3 mb-2">
                     <span className="font-mono font-black text-xl text-white">{room.roomId}</span>
                     <span className={clsx('text-xs font-medium', phaseColors[room.phase])}>
                       {phaseLabel[room.phase] ?? room.phase}
@@ -112,7 +112,7 @@ export function RoomListPanel({ adminAction, spectateRoom }: RoomListPanelProps)
                     )}
                   </div>
 
-                  <div className="flex gap-4 text-xs text-white/50">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/50">
                     <span>👥 {room.playerCount}/{room.settings.maxPlayers}</span>
                     {room.spectatorCount > 0 && <span>👁️ {room.spectatorCount} watching</span>}
                     {room.startedAt && (
@@ -122,7 +122,7 @@ export function RoomListPanel({ adminAction, spectateRoom }: RoomListPanelProps)
                   </div>
                 </div>
 
-                <div className="flex gap-2 flex-shrink-0">
+                <div className="flex flex-wrap gap-2 sm:flex-shrink-0">
                   <button
                     onClick={() => {
                       spectateRoom(room.roomId);

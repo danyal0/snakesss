@@ -39,24 +39,24 @@ export function OverviewPanel({ adminState }: OverviewPanelProps) {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-white mb-1">Overview</h2>
         <p className="text-white/40 text-sm">Real-time game statistics</p>
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
         {stats.map((stat, i) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            className="glass rounded-2xl p-4"
+            className="glass rounded-2xl p-3 sm:p-4"
           >
-            <div className="text-2xl mb-2">{stat.icon}</div>
-            <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
+            <div className="text-xl sm:text-2xl mb-2">{stat.icon}</div>
+            <div className={`text-xl sm:text-2xl font-bold ${stat.color}`}>{stat.value}</div>
             <div className="text-xs text-white/50 mt-1">{stat.label}</div>
           </motion.div>
         ))}
@@ -67,7 +67,7 @@ export function OverviewPanel({ adminState }: OverviewPanelProps) {
         <div className="glass rounded-2xl p-4">
           <h3 className="text-sm font-semibold text-white/70 mb-3">Win Distribution</h3>
           <div className="flex gap-2 items-center">
-            <span className="text-xs text-green-400 w-20">Humans</span>
+            <span className="text-xs text-green-400 w-16 sm:w-20">Humans</span>
             <div className="flex-1 h-3 bg-white/10 rounded-full overflow-hidden">
               <motion.div
                 className="h-full bg-gradient-to-r from-green-500 to-teal-500 rounded-full"
@@ -81,7 +81,7 @@ export function OverviewPanel({ adminState }: OverviewPanelProps) {
             <span className="text-xs text-white/50 w-8">{analytics.humanWins}</span>
           </div>
           <div className="flex gap-2 items-center mt-2">
-            <span className="text-xs text-red-400 w-20">Snakes</span>
+            <span className="text-xs text-red-400 w-16 sm:w-20">Snakes</span>
             <div className="flex-1 h-3 bg-white/10 rounded-full overflow-hidden">
               <motion.div
                 className="h-full bg-gradient-to-r from-red-500 to-rose-600 rounded-full"
@@ -105,10 +105,10 @@ export function OverviewPanel({ adminState }: OverviewPanelProps) {
           </h3>
           <div className="space-y-2">
             {activeRooms.slice(0, 5).map((room) => (
-              <div key={room.roomId} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
-                <div className="flex items-center gap-2">
+              <div key={room.roomId} className="flex items-center justify-between gap-3 py-1.5 border-b border-white/5 last:border-0">
+                <div className="min-w-0 flex items-center gap-2">
                   <span className="font-mono text-sm text-white font-bold">{room.roomId}</span>
-                  <span className="text-xs text-white/40">{phaseLabel[room.phase]}</span>
+                  <span className="truncate text-xs text-white/40">{phaseLabel[room.phase]}</span>
                 </div>
                 <span className="text-xs text-white/60">
                   {room.playerCount} players

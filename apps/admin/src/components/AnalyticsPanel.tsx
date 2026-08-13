@@ -51,14 +51,14 @@ export function AnalyticsPanel({ analytics }: AnalyticsPanelProps) {
   };
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-full scrollbar-none">
+    <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 overflow-y-auto h-full scrollbar-none">
       <div>
         <h2 className="text-2xl font-bold text-white mb-1">Analytics</h2>
         <p className="text-white/40 text-sm">Game statistics and patterns</p>
       </div>
 
       {/* Key metrics */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
         <MetricCard
           label="Total Games Played"
           value={analytics.totalGames}
@@ -173,7 +173,7 @@ function MetricCard({ label, value, icon, color }: { label: string; value: strin
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="glass rounded-2xl p-4"
+      className="glass rounded-2xl p-3 sm:p-4"
     >
       <div className="text-2xl mb-2">{icon}</div>
       <div className={`text-xl font-bold ${color}`}>{value}</div>
