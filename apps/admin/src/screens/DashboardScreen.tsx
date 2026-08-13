@@ -16,6 +16,7 @@ export function DashboardScreen() {
   const adminState = useAdminStore((s) => s.adminState);
   const { adminAction, spectateRoom } = useAdminSocket();
   const api = useAdminAPI();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     api.getAnalytics().catch(() => {});
@@ -30,27 +31,66 @@ export function DashboardScreen() {
 
   return (
     <div data-testid="admin-dashboard" className="h-full app-bg flex flex-col md:flex-row overflow-hidden">
+      {/* Mobile header */}
+      <header className="flex shrink-0 items-center justify-between border-b border-white/10 p-3 md:hidden">
+        <button
+          type="button"
+          aria-label="Open navigation"
+          aria-expanded={mobileNavOpen}
+          onClick={() => setMobileNavOpen(true)}
+          className="glass-button min-h-11 min-w-11 rounded-xl text-lg"
+        >
+          ☰
+        </button>
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🐍</span>
+          <span className="text-sm font-bold text-white">Snakesss Admin</span>
+        </div>
+        <div className="w-11" aria-hidden="true" />
+      </header>
+
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setMobileNavOpen(false)}
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+        />
+      )}
+
       {/* Sidebar */}
-      <div className="w-full md:w-56 flex-shrink-0 flex flex-row flex-wrap md:flex-col glass border-b md:border-b-0 md:border-r border-white/10">
-        <div className="flex-1 min-w-0 p-3 md:p-5 border-b-0 md:border-b border-white/10">
+      <div className={clsx(
+        'fixed inset-y-0 left-0 z-50 w-72 flex-shrink-0 flex flex-col glass border-r border-white/10 transition-transform duration-200 md:static md:w-56 md:translate-x-0 md:border-r',
+        mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
+      )}>
+        <div className="p-4 md:p-5 border-b border-white/10">
           <div className="flex items-center gap-2">
             <div className="text-2xl">🐍</div>
             <div className="min-w-0">
               <h1 className="text-sm font-bold text-white">Snakesss</h1>
               <p className="text-xs text-white/40">Admin Console</p>
             </div>
+            <button
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setMobileNavOpen(false)}
+              className="glass-button ml-auto min-h-11 min-w-11 rounded-xl text-lg md:hidden"
+            >
+              ×
+            </button>
           </div>
         </div>
 
-        <nav className="order-3 w-full flex-1 flex gap-1 overflow-x-auto p-2 border-t border-white/10 md:order-none md:block md:space-y-1 md:overflow-visible md:p-3 md:border-t-0">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               end={item.exact}
+              onClick={() => setMobileNavOpen(false)}
               className={({ isActive }) =>
                 clsx(
-                  'flex min-h-11 shrink-0 items-center gap-2 px-3 py-2.5 rounded-xl text-sm transition-all',
+                  'flex min-h-11 items-center gap-2 px-3 py-2.5 rounded-xl text-sm transition-all',
                   isActive
                     ? 'bg-white/15 text-white font-medium'
                     : 'text-white/50 hover:text-white hover:bg-white/8'
@@ -63,7 +103,7 @@ export function DashboardScreen() {
         </nav>
 
         {/* Live stats */}
-        <div className="hidden md:block p-3 border-t border-white/10 space-y-2">
+        <div className="p-3 border-t border-white/10 space-y-2">
           <div className="flex justify-between text-xs">
             <span className="text-white/40">Active Rooms</span>
             <span className="text-green-400 font-bold">
