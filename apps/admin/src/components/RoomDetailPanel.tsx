@@ -67,15 +67,15 @@ export function RoomDetailPanel({ adminAction }: RoomDetailPanelProps) {
   };
 
   return (
-    <div className="p-6 space-y-5 overflow-y-auto h-full scrollbar-none">
+    <div className="p-4 sm:p-6 space-y-5 overflow-y-auto h-full scrollbar-none">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-start gap-3 sm:items-center sm:gap-4">
         <button onClick={() => navigate('/dashboard/rooms')} className="text-white/50 hover:text-white text-sm">
           ← Back
         </button>
         <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-black font-mono text-white">{roomState.roomId}</h2>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h2 className="break-all text-xl font-black font-mono text-white sm:text-2xl">{roomState.roomId}</h2>
             <span className="text-sm text-white/50">{phaseLabel[roomState.phase]}</span>
             {roomState.isPaused && (
               <span className="text-xs bg-yellow-500/20 text-yellow-400 rounded-lg px-2 py-0.5">PAUSED</span>
@@ -198,7 +198,7 @@ export function RoomDetailPanel({ adminAction }: RoomDetailPanelProps) {
         <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-3">
           Settings
         </h3>
-        <div className="grid grid-cols-2 gap-2 text-sm">
+        <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
           {Object.entries(roomState.settings).map(([key, val]) => (
             <div key={key} className="flex justify-between items-center py-1 border-b border-white/5">
               <span className="text-white/50 text-xs">{key}</span>
@@ -240,16 +240,16 @@ function PlayerRow({
           </span>
         )}
       </div>
-      <div className="hidden group-hover:flex gap-1">
+      <div className="flex gap-1 sm:hidden sm:group-hover:flex">
         <button
           onClick={onKick}
-          className="px-2 py-1 rounded-lg text-[10px] text-yellow-400/70 hover:text-yellow-300 glass-button"
+          className="min-h-9 px-2 py-1 rounded-lg text-[10px] text-yellow-400/70 hover:text-yellow-300 glass-button"
         >
           Kick
         </button>
         <button
           onClick={onBan}
-          className="px-2 py-1 rounded-lg text-[10px] text-red-400/70 hover:text-red-300 glass-button"
+          className="min-h-9 px-2 py-1 rounded-lg text-[10px] text-red-400/70 hover:text-red-300 glass-button"
         >
           Ban
         </button>

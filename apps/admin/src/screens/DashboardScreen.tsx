@@ -29,20 +29,20 @@ export function DashboardScreen() {
   ];
 
   return (
-    <div data-testid="admin-dashboard" className="h-full app-bg flex overflow-hidden">
+    <div data-testid="admin-dashboard" className="h-full app-bg flex flex-col md:flex-row overflow-hidden">
       {/* Sidebar */}
-      <div className="w-56 flex-shrink-0 flex flex-col glass border-r border-white/10">
-        <div className="p-5 border-b border-white/10">
+      <div className="w-full md:w-56 flex-shrink-0 flex flex-row flex-wrap md:flex-col glass border-b md:border-b-0 md:border-r border-white/10">
+        <div className="flex-1 min-w-0 p-3 md:p-5 border-b-0 md:border-b border-white/10">
           <div className="flex items-center gap-2">
             <div className="text-2xl">🐍</div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-sm font-bold text-white">Snakesss</h1>
               <p className="text-xs text-white/40">Admin Console</p>
             </div>
           </div>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="order-3 w-full flex-1 flex gap-1 overflow-x-auto p-2 border-t border-white/10 md:order-none md:block md:space-y-1 md:overflow-visible md:p-3 md:border-t-0">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
@@ -50,7 +50,7 @@ export function DashboardScreen() {
               end={item.exact}
               className={({ isActive }) =>
                 clsx(
-                  'flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm transition-all',
+                  'flex min-h-11 shrink-0 items-center gap-2 px-3 py-2.5 rounded-xl text-sm transition-all',
                   isActive
                     ? 'bg-white/15 text-white font-medium'
                     : 'text-white/50 hover:text-white hover:bg-white/8'
@@ -63,7 +63,7 @@ export function DashboardScreen() {
         </nav>
 
         {/* Live stats */}
-        <div className="p-3 border-t border-white/10 space-y-2">
+        <div className="hidden md:block p-3 border-t border-white/10 space-y-2">
           <div className="flex justify-between text-xs">
             <span className="text-white/40">Active Rooms</span>
             <span className="text-green-400 font-bold">
@@ -78,10 +78,10 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        <div className="p-3">
+        <div className="p-2 md:p-3">
           <button
             onClick={logout}
-            className="w-full text-xs text-white/40 hover:text-red-400 transition-colors py-2 rounded-lg hover:bg-red-500/10"
+            className="min-h-11 px-3 text-xs text-white/40 hover:text-red-400 transition-colors py-2 rounded-lg hover:bg-red-500/10"
           >
             Sign Out
           </button>
@@ -89,7 +89,7 @@ export function DashboardScreen() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 overflow-y-auto scrollbar-none">
+      <div className="min-w-0 flex-1 overflow-y-auto scrollbar-none">
         <Routes>
           <Route path="/" element={<OverviewPanel adminState={adminState} />} />
           <Route path="/rooms" element={<RoomListPanel adminAction={adminAction} spectateRoom={spectateRoom} />} />
